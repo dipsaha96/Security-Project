@@ -1,0 +1,24 @@
+# =============================================================================
+# Router Container — multi-homed, IP forwarding enabled
+# Handles directed-broadcast forwarding and defense configurations
+# =============================================================================
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tcpdump \
+    iputils-ping \
+    iproute2 \
+    iptables \
+    net-tools \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir scapy
+
+WORKDIR /configs
+
+# Copy and run the router setup script at container start
+COPY configs/router_setup.sh /router_setup.sh
+RUN chmod +x /router_setup.sh
+
+CMD ["/bin/bash", "-c", "/router_setup.sh && tail -f /dev/null"]

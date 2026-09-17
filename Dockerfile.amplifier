@@ -1,0 +1,19 @@
+# =============================================================================
+# Amplifier Host Container
+# Configured to respond to broadcast ICMP Echo Requests
+# NOTE: icmp_echo_ignore_broadcasts is set via docker-compose sysctls
+# =============================================================================
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tcpdump \
+    iputils-ping \
+    iproute2 \
+    net-tools \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /
+
+# Keep container alive (broadcast echo setting is done via sysctls in compose)
+CMD ["tail", "-f", "/dev/null"]

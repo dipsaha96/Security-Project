@@ -1,0 +1,21 @@
+# =============================================================================
+# Victim Container
+# Monitoring and capture tools for observing reflected ICMP traffic
+# =============================================================================
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tcpdump \
+    tshark \
+    iputils-ping \
+    iproute2 \
+    net-tools \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir scapy matplotlib
+
+WORKDIR /scripts
+
+# Keep container alive
+CMD ["tail", "-f", "/dev/null"]
