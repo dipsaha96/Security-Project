@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ICMP Smurf Attack — Project Explanation</title>
+<style>
+  :root{
+    --ink:#1a1a2e; --muted:#555; --line:#d9dee5; --bg:#ffffff;
+    --accent:#c0392b; --accent2:#2c6fbb; --ok:#1e8449; --soft:#f5f7fa;
+    --code:#2d2d3a; --codebg:#f3f4f8;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); line-height:1.5; margin:0; background:var(--bg); font-size:12.5px;}
+  .wrap{max-width:900px; margin:0 auto; padding:32px 40px;}
+  h1{font-size:26px; margin:0 0 4px; color:var(--ink);}
+  h2{font-size:18px; margin:26px 0 8px; padding-bottom:5px; border-bottom:2px solid var(--accent);
+    color:var(--accent);}
+  h3{font-size:14.5px; margin:16px 0 5px; color:var(--accent2);}
+  p{margin:7px 0;}
+  .sub{color:var(--muted); font-size:13px; margin:0 0 6px;}
+  .tag{display:inline-block; background:var(--soft); border:1px solid var(--line);
+    border-radius:20px; padding:2px 11px; font-size:11px; color:var(--muted); margin:2px 4px 2px 0;}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace; background:var(--codebg); color:var(--code);
+    padding:1px 5px; border-radius:4px; font-size:11.5px;}
+  pre{background:var(--code); color:#e8e8f0; padding:12px 14px; border-radius:8px; overflow:auto;
+    font-family:"SF Mono",Menlo,Consolas,monospace; font-size:11px; line-height:1.45;}
+  pre .c{color:#8a8aa0;}
+  table{border-collapse:collapse; width:100%; margin:10px 0; font-size:11.5px;}
+  th,td{border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top;}
+  th{background:var(--soft); font-weight:600;}
+  .ok{color:var(--ok); font-weight:600;}
+  .bad{color:var(--accent); font-weight:600;}
+  .box{background:var(--soft); border:1px solid var(--line); border-left:4px solid var(--accent2);
+    border-radius:6px; padding:12px 16px; margin:12px 0;}
+  .box.warn{border-left-color:var(--accent);}
+  .box.good{border-left-color:var(--ok);}
+  ul,ol{margin:6px 0 6px 4px; padding-left:22px;}
+  li{margin:4px 0;}
+  .diagram{background:var(--soft); border:1px solid var(--line); border-radius:8px; padding:16px;
+    font-family:"SF Mono",Menlo,Consolas,monospace; font-size:11px; line-height:1.5; white-space:pre; overflow:auto;}
+  .lead{font-size:13.5px; color:var(--muted);}
+  .kpi-row{display:flex; gap:12px; margin:14px 0; flex-wrap:wrap;}
+  .kpi{flex:1; min-width:150px; background:var(--soft); border:1px solid var(--line); border-radius:8px;
+    padding:12px 14px; text-align:center;}
+  .kpi .n{font-size:24px; font-weight:700; color:var(--accent);}
+  .kpi .l{font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;}
+  .qa{margin:8px 0;}
+  .qa .q{font-weight:600; color:var(--accent2);}
+  .qa .a{margin:3px 0 10px;}
+  footer{margin-top:30px; padding-top:12px; border-top:1px solid var(--line); color:var(--muted); font-size:10.5px;}
+  @media print{
+    body{font-size:11px;}
+    .wrap{padding:0 6px; max-width:none;}
+    h2{page-break-after:avoid;} h3{page-break-after:avoid;}
+    pre,table,.diagram,.box,.kpi-row{page-break-inside:avoid;}
+    .page-break{page-break-before:always;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>ICMP Smurf Attack — Simulation &amp; Defense</h1>
+<p class="sub">CSE 406 · Computer Security Sessional · Docker-based isolated lab</p>
+<p>
+  <span class="tag">ICMP reflection/amplification (DDoS)</span>
+  <span class="tag">Docker Compose</span>
+  <span class="tag">Scapy · iptables · tcpdump</span>
+  <span class="tag">4 defenses tested</span>
+</p>
+
+<div class="box">
+  <strong>One-line summary:</strong> This project builds a small isolated virtual network,
+  launches a classic <em>Smurf</em> denial-of-service attack inside it (where one attacker packet
+  is multiplied into many packets aimed at a victim), and then demonstrates four different defenses
+  that each shut the attack down — all measured with real packet captures.
+</div>
+
+<h2>1. What is a Smurf Attack? (the core idea)</h2>
+<p class="lead">A Smurf attack is a <strong>reflection + amplification</strong> denial-of-service attack that abuses ICMP (ping).</p>
+<p>It relies on two tricks used together:</p>
+<ol>
+  <li><strong>Source-address spoofing</strong> — the attacker forges the "From" address on a ping request, writing the <em>victim's</em> IP address as the sender instead of their own.</li>
+  <li><strong>Directed broadcast</strong> — the attacker sends that ping not to one host, but to a network's <em>broadcast address</em> (e.g. <code>203.0.113.255</code>), which delivers it to <em>every</em> host on that network at once.</li>
+</ol>
+<p>The result: every host on the broadcast network ("amplifiers") receives a ping request that appears to come from the victim, so they all send their ping <em>replies</em> to the victim. One packet from the attacker becomes <strong>N packets</strong> hitting the victim, where N is the number of amplifier hosts. Scale N up and the victim is flooded — that is the denial of service.</p>
+
+<div class="box warn">
+  <strong>Why it's called "amplification":</strong> the attacker spends little bandwidth (a few small packets)
+  but the victim absorbs a much larger volume. In our lab the amplification factor is <strong>6×</strong>
+  (6 amplifier hosts). On the real 1990s Internet it could be hundreds or thousands.
+</div>
+
+<h2>2. Project Goal</h2>
+<ul>
+  <li>Recreate the full Smurf attack chain safely in an <strong>isolated lab</strong> (no real networks touched).</li>
+  <li><strong>Measure</strong> the amplification with packet captures at the victim.</li>
+  <li>Implement and <strong>verify four defenses</strong>, showing each one reduces the attack traffic to zero.</li>
+  <li>Produce <strong>analysis and plots</strong> comparing attack vs. defenses.</li>
+</ul>
+
+<h2>3. The Lab Topology</h2>
+<p>Everything runs as Docker containers on three isolated virtual networks, connected by one multi-homed <strong>router</strong>. Addresses use RFC 5737 "documentation" ranges (safe, non-routable in practice).</p>
+
+<div class="diagram">        ATTACKER  (10.0.0.9)
+             │   sends spoofed pings (src = victim)
+             │
+   ┌─────────┴──────────┐  attacker_net  10.0.0.0/24
+             │
+        ┌────┴─────┐
+        │  ROUTER  │   multi-homed, IP forwarding ON
+        └──┬────┬──┘   forwards the directed broadcast
+           │    │
+ amplifier_net │    │ victim_net
+ 203.0.113.0/24│    │ 198.51.100.0/24
+   ┌───────────┘    └────────────┐
+   │                             │
+ H1 .11   H2 .12   H3 .13        VICTIM (198.51.100.10)
+ H4 .14   H5 .15   H6 .16        ← receives all the replies
+ (six amplifier hosts)</div>
+
+<table>
+  <tr><th>Role</th><th>Container(s)</th><th>Address</th><th>Job</th></tr>
+  <tr><td>Attacker</td><td><code>attacker</code></td><td>10.0.0.9</td><td>Generates spoofed ICMP packets (Scapy)</td></tr>
+  <tr><td>Router</td><td><code>router</code></td><td>.2 on each net</td><td>Routes between all 3 subnets; where most defenses live</td></tr>
+  <tr><td>Amplifiers</td><td><code>amp-h1</code> … <code>amp-h6</code></td><td>203.0.113.11–16</td><td>Reply to broadcast pings → reflect to victim</td></tr>
+  <tr><td>Victim</td><td><code>victim</code></td><td>198.51.100.10</td><td>Target; captures &amp; analyzes the flood</td></tr>
+</table>
+
+<div class="page-break"></div>
+
+<h2>4. How the Attack Works — step by step</h2>
+<ol>
+  <li>The attacker runs <code>smurf_attack.py</code>, which crafts ICMP Echo Requests with a <strong>forged source IP = the victim (198.51.100.10)</strong> and a <strong>destination = the amplifier broadcast (203.0.113.255)</strong>.</li>
+  <li>The packet travels to the router. The router <strong>forwards the directed broadcast</strong> onto the amplifier network, delivering it to all six amplifier hosts.</li>
+  <li>Each amplifier sees a ping "from the victim" and dutifully sends an <strong>Echo Reply back to the victim</strong>.</li>
+  <li>The victim is hit by <strong>6 replies for every 1 packet</strong> the attacker sent. Repeating this at speed floods the victim.</li>
+</ol>
+
+<div class="box good">
+  <strong>Measured result (from packet captures at the victim):</strong>
+  <div class="kpi-row">
+    <div class="kpi"><div class="n">10</div><div class="l">spoofed packets sent</div></div>
+    <div class="kpi"><div class="n">6</div><div class="l">amplifier hosts reply</div></div>
+    <div class="kpi"><div class="n">60</div><div class="l">replies hit the victim</div></div>
+    <div class="kpi"><div class="n">6×</div><div class="l">amplification factor</div></div>
+  </div>
+  The victim's capture shows <strong>60 Echo Replies from 6 unique sources</strong> — proof the amplification worked.
+</div>
+
+<h2>5. The Four Defenses</h2>
+<p>Each defense is enabled one at a time, the same attack is re-run, and the victim's capture is checked. In every case the reflected traffic reaching the victim drops to <strong>zero</strong>.</p>
+
+<table>
+  <tr><th>#</th><th>Defense</th><th>Runs on</th><th>How it works</th><th>Standard</th></tr>
+  <tr>
+    <td>1</td><td><strong>Disable directed-broadcast forwarding</strong></td><td>Router</td>
+    <td>Router drops any packet aimed at the broadcast address (<code>203.0.113.255</code>), so the ping never fans out to the amplifiers. <em>The root-cause fix.</em></td>
+    <td>RFC 2644</td>
+  </tr>
+  <tr>
+    <td>2</td><td><strong>Ingress filtering (source validation)</strong></td><td>Router</td>
+    <td>Router checks that a packet's source address matches the network it arrived on (reverse-path filtering + iptables). The spoofed "from victim" packet arriving on the attacker network is rejected.</td>
+    <td>BCP 38 / RFC 2827</td>
+  </tr>
+  <tr>
+    <td>3</td><td><strong>Suppress broadcast echo replies</strong></td><td>Amplifiers</td>
+    <td>Each host sets <code>icmp_echo_ignore_broadcasts = 1</code>, so it simply ignores pings sent to a broadcast address — removing it from the reflection pool.</td>
+    <td>§10.2</td>
+  </tr>
+  <tr>
+    <td>4</td><td><strong>ICMP rate limiting</strong></td><td>Router</td>
+    <td>iptables caps how many ICMP Echo Replies per second may pass. A mitigation (limits impact) rather than a cure — the reflection path still exists.</td>
+    <td>§10.2</td>
+  </tr>
+</table>
+
+<div class="box">
+  <strong>Defense strength, ranked:</strong> Defenses 1 &amp; 2 are the strongest because they stop the attack at its
+  two enabling conditions (broadcast + spoofing). Defense 3 removes the amplifiers. Defense 4 only softens the blow.
+  A real network would combine them (defense in depth).
+</div>
+
+<h2>6. Results Summary</h2>
+<table>
+  <tr><th>Scenario</th><th>Replies reaching victim</th><th>Outcome</th></tr>
+  <tr><td>Baseline (normal ICMP)</td><td>~0 at victim</td><td>Normal operation</td></tr>
+  <tr><td><span class="bad">Smurf attack (no defense)</span></td><td><span class="bad">60 (6× amplification)</span></td><td><span class="bad">Victim flooded</span></td></tr>
+  <tr><td>Defense 1 — broadcast disabled</td><td class="ok">0</td><td class="ok">Attack blocked</td></tr>
+  <tr><td>Defense 2 — ingress filtering</td><td class="ok">0</td><td class="ok">Attack blocked</td></tr>
+  <tr><td>Defense 3 — suppress echo</td><td class="ok">0</td><td class="ok">Attack blocked</td></tr>
+  <tr><td>Defense 4 — rate limiting</td><td class="ok">0 / capped</td><td class="ok">Impact reduced</td></tr>
+</table>
+<p>Plots are generated automatically in <code>results/</code>: per-capture timelines, replies-per-amplifier charts, and a <code>defense_comparison.png</code> bar chart contrasting all scenarios.</p>
+
+<div class="page-break"></div>
+
+<h2>7. How to Run It (demo commands)</h2>
+<pre><span class="c"># 1. Build and start the whole lab (9 containers)</span>
+docker compose up -d --build
+
+<span class="c"># 2. Run the complete experiment: baseline → attack → all 4 defenses → analysis</span>
+./run_experiment.sh all
+
+<span class="c"># Or run individual phases:</span>
+./run_experiment.sh baseline   <span class="c"># normal ICMP</span>
+./run_experiment.sh attack     <span class="c"># the Smurf attack</span>
+./run_experiment.sh defense    <span class="c"># test all four defenses</span>
+./run_experiment.sh analyze    <span class="c"># analysis + plots</span>
+
+<span class="c"># 3. Tear everything down</span>
+docker compose down</pre>
+
+<h3>Key files</h3>
+<table>
+  <tr><th>File</th><th>Purpose</th></tr>
+  <tr><td><code>docker-compose.yml</code></td><td>Defines the 9 containers and 3 networks</td></tr>
+  <tr><td><code>scripts/attacker/smurf_attack.py</code></td><td>Crafts the spoofed ICMP packets (Scapy)</td></tr>
+  <tr><td><code>scripts/victim/capture.sh</code></td><td>tcpdump capture on the victim</td></tr>
+  <tr><td><code>scripts/defense/*.sh</code></td><td>The four defense scripts</td></tr>
+  <tr><td><code>scripts/analysis/*.py</code></td><td>Packet analysis &amp; plotting</td></tr>
+  <tr><td><code>run_experiment.sh</code></td><td>Orchestrates the whole demo</td></tr>
+</table>
+
+<h2>8. Key Technical Points (things the examiner may probe)</h2>
+<ul>
+  <li><strong>Why does the victim get flooded and not the attacker?</strong> Because the source IP is spoofed to the victim, so the amplifiers reply to the victim, not the true sender.</li>
+  <li><strong>Why is a broadcast used?</strong> To reach many hosts with one packet — that is where the amplification comes from.</li>
+  <li><strong>Why is this "reflection"?</strong> The victim never talks to the attacker; the amplifiers are innocent third parties who reflect traffic, hiding the attacker.</li>
+  <li><strong>Directed-broadcast forwarding</strong> had to be explicitly enabled on the router (<code>net.ipv4.conf.*.bc_forwarding=1</code>) because modern Linux drops directed broadcasts by default — which is itself Defense 1 in action.</li>
+  <li><strong>Isolation:</strong> the lab has no route to the internet (the router carries no default route), so the attack cannot escape — important for doing this safely and ethically.</li>
+</ul>
+
+<h2>9. Likely Q&amp;A</h2>
+<div class="qa"><div class="q">Q: Is the Smurf attack still a threat today?</div>
+<div class="a">A: Rarely in its original form — modern routers disable directed-broadcast forwarding by default (RFC 2644) and many networks deploy ingress filtering (BCP 38). But the underlying idea — reflection &amp; amplification — is very much alive in DNS, NTP, and memcached amplification DDoS attacks.</div></div>
+
+<div class="qa"><div class="q">Q: What is the single most effective defense?</div>
+<div class="a">A: Disabling directed-broadcast forwarding on routers (Defense 1) kills this specific attack at the source. Ingress filtering (Defense 2) is the most important general defense because it stops source spoofing, which underlies almost all reflection attacks.</div></div>
+
+<div class="qa"><div class="q">Q: How did you prove the attack and defenses actually work?</div>
+<div class="a">A: With packet captures (tcpdump) taken on the victim. Under attack we captured 60 reflected replies from 6 amplifiers; with each defense enabled the victim captured 0 — objective, measured evidence rather than assumption.</div></div>
+
+<div class="qa"><div class="q">Q: Why Docker instead of real machines or VMs?</div>
+<div class="a">A: Lightweight, reproducible, and fully isolated. Nine "hosts" and three networks run on one laptop, the whole topology is code (docker-compose.yml), and it can be torn down and rebuilt identically in seconds.</div></div>
+
+<div class="qa"><div class="q">Q: Why do the amplifiers respond to a broadcast ping at all?</div>
+<div class="a">A: By default a host answers ICMP Echo Requests, including those sent to its network's broadcast address. Defense 3 turns that behavior off.</div></div>
+
+<footer>
+  ICMP Smurf Attack — Project Explanation · Prepared as presentation study notes ·
+  All results measured from packet captures in the isolated Docker lab.
+</footer>
+
+</div>
+</body>
+</html>
