@@ -1,0 +1,249 @@
+# =============================================================================
+# ICMP Smurf Attack Lab — Docker Compose Topology
+# =============================================================================
+# Topology (from Security Design Report §4):
+#
+#   Attacker (10.0.0.9)
+#       |
+#   [attacker_net 10.0.0.0/24]
+#       |
+#   Router (multi-homed)
+#       |
+#   [amplifier_net 203.0.113.0/24]   ---->   [victim_net 198.51.100.0/24]
+#       |                                         |
+#   H1..H6 (203.0.113.11-.16)             Victim (198.51.100.10)
+#
+# All networks are internal (no external routing). Uses documentation
+# address space per RFC 5737 (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24).
+# =============================================================================
+
+services:
+  # ---------- ATTACKER ----------
+  attacker:
+    build:
+      context: .
+      dockerfile: Dockerfile.attacker
+    container_name: attacker
+    hostname: attacker
+    command: sh -c "ip route replace default via 10.0.0.2 && exec tail -f /dev/null"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      attacker_net:
+        ipv4_address: 10.0.0.9
+    volumes:
+      - ./scripts/attacker:/scripts
+      - ./captures:/captures
+    tty: true
+    stdin_open: true
+
+  # ---------- ROUTER (multi-homed) ----------
+  router:
+    build:
+      context: .
+      dockerfile: Dockerfile.router
+    container_name: router
+    privileged: true
+    hostname: router
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.icmp_echo_ignore_broadcasts=0
+      # Forward directed broadcasts (203.0.113.255) into the amplifier network
+      # so the Smurf attack fans out to all amplifier hosts. Without this,
+      # modern Linux silently drops directed broadcasts and there is no amplification.
+      - net.ipv4.conf.all.bc_forwarding=1
+    networks:
+      attacker_net:
+        ipv4_address: 10.0.0.2
+      amplifier_net:
+        ipv4_address: 203.0.113.254
+      victim_net:
+        ipv4_address: 198.51.100.2
+    volumes:
+      - ./configs:/configs
+      - ./scripts/defense:/scripts/defense
+      - ./captures:/captures
+    tty: true
+    stdin_open: true
+
+  # ---------- AMPLIFIER HOSTS H1–H6 ----------
+  amp-h1:
+    build:
+      context: .
+      dockerfile: Dockerfile.amplifier
+    container_name: amp-h1
+    privileged: true
+    hostname: amp-h1
+    command: sh -c "ip route replace default via 203.0.113.254 && exec tail -f /dev/null"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    sysctls:
+      - net.ipv4.icmp_echo_ignore_broadcasts=0
+    networks:
+      amplifier_net:
+        ipv4_address: 203.0.113.11
+    volumes:
+      - ./captures:/captures
+    tty: true
+
+  amp-h2:
+    build:
+      context: .
+      dockerfile: Dockerfile.amplifier
+    container_name: amp-h2
+    privileged: true
+    hostname: amp-h2
+    command: sh -c "ip route replace default via 203.0.113.254 && exec tail -f /dev/null"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    sysctls:
+      - net.ipv4.icmp_echo_ignore_broadcasts=0
+    networks:
+      amplifier_net:
+        ipv4_address: 203.0.113.12
+    volumes:
+      - ./captures:/captures
+    tty: true
+
+  amp-h3:
+    build:
+      context: .
+      dockerfile: Dockerfile.amplifier
+    container_name: amp-h3
+    privileged: true
+    hostname: amp-h3
+    command: sh -c "ip route replace default via 203.0.113.254 && exec tail -f /dev/null"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    sysctls:
+      - net.ipv4.icmp_echo_ignore_broadcasts=0
+    networks:
+      amplifier_net:
+        ipv4_address: 203.0.113.13
+    volumes:
+      - ./captures:/captures
+    tty: true
+
+  amp-h4:
+    build:
+      context: .
+      dockerfile: Dockerfile.amplifier
+    container_name: amp-h4
+    privileged: true
+    hostname: amp-h4
+    command: sh -c "ip route replace default via 203.0.113.254 && exec tail -f /dev/null"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    sysctls:
+      - net.ipv4.icmp_echo_ignore_broadcasts=0
+    networks:
+      amplifier_net:
+        ipv4_address: 203.0.113.14
+    volumes:
+      - ./captures:/captures
+    tty: true
+
+  amp-h5:
+    build:
+      context: .
+      dockerfile: Dockerfile.amplifier
+    container_name: amp-h5
+    privileged: true
+    hostname: amp-h5
+    command: sh -c "ip route replace default via 203.0.113.254 && exec tail -f /dev/null"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    sysctls:
+      - net.ipv4.icmp_echo_ignore_broadcasts=0
+    networks:
+      amplifier_net:
+        ipv4_address: 203.0.113.15
+    volumes:
+      - ./captures:/captures
+    tty: true
+
+  amp-h6:
+    build:
+      context: .
+      dockerfile: Dockerfile.amplifier
+    container_name: amp-h6
+    privileged: true
+    hostname: amp-h6
+    command: sh -c "ip route replace default via 203.0.113.254 && exec tail -f /dev/null"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    sysctls:
+      - net.ipv4.icmp_echo_ignore_broadcasts=0
+    networks:
+      amplifier_net:
+        ipv4_address: 203.0.113.16
+    volumes:
+      - ./captures:/captures
+    tty: true
+
+  # ---------- VICTIM ----------
+  victim:
+    build:
+      context: .
+      dockerfile: Dockerfile.victim
+    container_name: victim
+    hostname: victim
+    command: sh -c "ip route replace default via 198.51.100.2 && exec tail -f /dev/null"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      victim_net:
+        ipv4_address: 198.51.100.10
+    volumes:
+      - ./scripts/victim:/scripts
+      - ./scripts/analysis:/scripts/analysis
+      - ./captures:/captures
+      - ./results:/results
+    tty: true
+    stdin_open: true
+
+# =============================================================================
+# Networks — all internal (no external gateway)
+# Docker auto-assigns a gateway IP on the bridge interface.
+# Container IPs are chosen to avoid conflicting with Docker's gateway.
+# =============================================================================
+networks:
+  attacker_net:
+    driver: bridge
+    # NOTE: NOT 'internal: true'. Internal networks install DOCKER-INTERNAL
+    # iptables rules that DROP any packet whose destination is outside the
+    # bridge subnet, which makes cross-subnet routing through the multi-homed
+    # router impossible. Instead we disable NAT (masquerade) below so the lab
+    # still has no path to the internet, while allowing router-based routing.
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24
+
+  amplifier_net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+    ipam:
+      config:
+        - subnet: 203.0.113.0/24
+
+  victim_net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+    ipam:
+      config:
+        - subnet: 198.51.100.0/24
