@@ -1,0 +1,5 @@
+# Generated run artifacts (recreated by ./run_experiment.sh)
+captures/
+results/
+*.bak
+.DS_Store
