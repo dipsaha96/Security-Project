@@ -1,13 +1,10 @@
 #!/bin/bash
-# =============================================================================
-# Defense 3: Suppress Broadcast ICMP Echo Responses (§10.2)
-# =============================================================================
+# Defense 3: Suppress Broadcast ICMP Echo Responses 
 # Run on: AMPLIFIER HOSTS (all H1–H6)
 #
 # Effect: Hosts will ignore ICMP Echo Requests that are addressed to
 #         broadcast or multicast destinations. This removes the amplifier
 #         hosts from the reflection mechanism.
-# =============================================================================
 
 ACTION="${1:-enable}"
 

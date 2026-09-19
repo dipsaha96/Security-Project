@@ -1,7 +1,5 @@
 #!/bin/bash
-# =============================================================================
 # Victim Packet Capture Script
-# =============================================================================
 # Runs tcpdump on the victim to capture ICMP traffic for analysis.
 #
 # Usage:
@@ -10,7 +8,6 @@
 #   ./capture.sh attack                 # tag capture as "attack"
 #   ./capture.sh defense_broadcast      # tag capture as defense test
 #   ./capture.sh <label> <duration>     # custom label and duration in seconds
-# =============================================================================
 
 LABEL="${1:-capture}"
 DURATION="${2:-30}"

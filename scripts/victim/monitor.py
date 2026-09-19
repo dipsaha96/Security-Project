@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """
-=============================================================================
 ICMP Smurf Attack — Real-Time Detection & Monitoring System
-=============================================================================
-Implements the detection telemetry from Security Design Report §10.1:
 
 Monitors for:
   1. Unusual volume of ICMP Echo Replies without matching Echo Requests
@@ -16,7 +13,6 @@ Usage:
     python3 monitor.py                          # default thresholds
     python3 monitor.py --threshold 10 --window 5
     python3 monitor.py --interface eth0 --log /captures/alerts.log
-=============================================================================
 """
 
 import argparse
@@ -47,7 +43,7 @@ class SmurfDetector:
     """
     Real-time ICMP traffic analyzer for Smurf attack detection.
 
-    Detection strategy (§10.1):
+    Detection strategy
     - Track inbound Echo Replies vs outbound Echo Requests
     - Alert if reply count >> request count (unsolicited replies)
     - Alert if many unique source IPs send replies to us

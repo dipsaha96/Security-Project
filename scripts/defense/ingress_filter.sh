@@ -1,14 +1,11 @@
 #!/bin/bash
-# =============================================================================
-# Defense 2: Ingress Filtering / Source-Address Validation (§10.2, RFC 2827)
-# =============================================================================
+# Defense 2: Ingress Filtering / Source-Address Validation 
 # Run on: ROUTER (or attacker's egress point)
 #
 # Effect: Drops packets with source addresses that don't belong to the
 #         network they arrived from. Specifically, blocks any packet
 #         arriving from the attacker network (10.0.0.0/24) that claims
 #         a source outside that range (e.g., spoofed 198.51.100.10).
-# =============================================================================
 
 ACTION="${1:-enable}"
 

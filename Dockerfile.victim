@@ -1,7 +1,6 @@
-# =============================================================================
 # Victim Container
 # Monitoring and capture tools for observing reflected ICMP traffic
-# =============================================================================
+
 FROM python:3.11-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

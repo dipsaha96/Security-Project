@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ICMP Smurf Attack — Final Report</title>
+<style>
+  :root{ --ink:#111; --muted:#444; --line:#bbb; --accent:#7a1f1f; --soft:#f4f4f4; }
+  *{box-sizing:border-box;}
+  html,body{margin:0; padding:0;}
+  body{font-family:"Times New Roman", Georgia, serif; color:var(--ink); font-size:11.5pt; line-height:1.42;}
+  .page{padding:0 54px;}
+  h1,h2,h3{font-family:"Times New Roman", Georgia, serif;}
+  h2{font-size:15pt; margin:20px 0 6px; border-bottom:1px solid var(--line); padding-bottom:3px;}
+  h3{font-size:12.5pt; margin:13px 0 4px;}
+  p{margin:7px 0; text-align:justify;}
+  code,.mono{font-family:"Courier New", monospace; font-size:10pt;}
+  .small{font-size:10pt; color:var(--muted);}
+  table{border-collapse:collapse; width:100%; margin:9px 0; font-size:10.5pt;}
+  th,td{border:1px solid var(--line); padding:5px 8px; text-align:left; vertical-align:top;}
+  th{background:var(--soft);}
+  figure{margin:14px 0; text-align:center; page-break-inside:avoid;}
+  figure img{max-width:92%; border:1px solid var(--line);}
+  figcaption{font-size:9.8pt; color:var(--muted); margin-top:5px; text-align:center;}
+  ul,ol{margin:6px 0; padding-left:24px;}
+  li{margin:3px 0; text-align:justify;}
+  .center{text-align:center;}
+  .titlepage{height:960px; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; text-align:center; padding-top:70px;}
+  .titlepage .uni{font-size:18pt; font-weight:bold;}
+  .titlepage .dept{font-size:13pt; margin-top:4px;}
+  .titlepage .course{font-size:15pt; font-weight:bold; margin-top:6px;}
+  .titlepage .logo{font-size:60pt; margin:26px 0;}
+  .titlepage .ptitle{font-size:22pt; font-weight:bold; color:var(--accent); margin:12px 40px;}
+  .titlepage .rtype{font-size:15pt; margin-top:2px;}
+  .titlepage .blk{margin-top:30px; font-size:12.5pt;}
+  .titlepage .blk .lbl{font-style:italic; color:var(--muted);}
+  .toc div{display:flex; justify-content:space-between; border-bottom:1px dotted #ccc; padding:0.8px 0; font-size:10.5pt;}
+  .toc .l2{padding-left:22px; font-size:10pt;}
+  .box{background:var(--soft); border:1px solid var(--line); border-left:3px solid var(--accent); padding:9px 13px; margin:11px 0; page-break-inside:avoid;}
+  .hdr-fields{width:100%; border-collapse:collapse; font-size:9.5pt; margin:8px 0;}
+  .hdr-fields td{border:1px solid #999; text-align:center; padding:5px 3px;}
+  .hdr-fields .hl{background:#fbe6e6; font-weight:bold;}
+  .kpi{display:flex; gap:10px; margin:12px 0; text-align:center;}
+  .kpi div{flex:1; border:1px solid var(--line); padding:8px; background:var(--soft);}
+  .kpi .n{font-size:19pt; font-weight:bold; color:var(--accent);}
+  .kpi .t{font-size:8.8pt; color:var(--muted); text-transform:uppercase;}
+  svg{max-width:100%; height:auto;}
+  @media print{
+    @page{ size:A4; margin:20mm 0; }
+    .page{padding:0 20mm;}
+    .page-break{page-break-before:always;}
+    h2,h3{page-break-after:avoid;}
+    table,figure,.box,.kpi,svg{page-break-inside:avoid;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== TITLE PAGE ===================== -->
+<div class="page titlepage page-break">
+  <div class="uni">Bangladesh University of Engineering and Technology</div>
+  <div class="dept">Department of Computer Science and Engineering</div>
+  <div class="course">CSE 406 — Computer Security Sessional</div>
+  <div class="logo">🛡️</div>
+  <div class="ptitle">ICMP Smurf Attack:<br>Simulation and Defense</div>
+  <div class="rtype">Final Report</div>
+
+  <div class="blk">
+    <div class="lbl">Submitted by</div>
+    <div><b>Dip Saha</b> &nbsp;—&nbsp; Student ID: 2105138</div>
+    <div><b>MD. Mehedi Hasan Mim</b> &nbsp;—&nbsp; Student ID: 2105142</div>
+  </div>
+
+  <div class="blk">
+    <div class="lbl">Supervised by</div>
+    <div><b>Anwarul Bashir Shuaib</b></div>
+    <div class="small">Lecturer, Department of CSE, BUET</div>
+  </div>
+
+  <div class="blk">September 19, 2026</div>
+</div>
+
+<!-- ===================== CONTENTS ===================== -->
+<div class="page page-break">
+  <h2>Contents</h2>
+  <div class="toc">
+    <div><span>1&nbsp;&nbsp;Overview of the Project Idea</span><span>3</span></div>
+    <div><span>2&nbsp;&nbsp;Background: ICMP Echo, Directed Broadcast, and Amplification</span><span>3</span></div>
+    <div><span>3&nbsp;&nbsp;Network Topology, Components and Timing Diagram</span><span>4</span></div>
+    <div class="l2"><span>3.1&nbsp;&nbsp;Network topology</span><span>4</span></div>
+    <div class="l2"><span>3.2&nbsp;&nbsp;Components</span><span>4</span></div>
+    <div class="l2"><span>3.3&nbsp;&nbsp;Timing (sequence) diagram</span><span>5</span></div>
+    <div><span>4&nbsp;&nbsp;Packet and Frame Structure</span><span>5</span></div>
+    <div><span>5&nbsp;&nbsp;Implementation Plan</span><span>6</span></div>
+    <div><span>6&nbsp;&nbsp;Expected Outcome of a Successful Attack</span><span>7</span></div>
+    <div><span>7&nbsp;&nbsp;Actual Outcome and Observations</span><span>7</span></div>
+    <div class="l2"><span>7.1&nbsp;&nbsp;Launching the attack (attacker)</span><span>7</span></div>
+    <div class="l2"><span>7.2&nbsp;&nbsp;The victim's live view</span><span>8</span></div>
+    <div class="l2"><span>7.3&nbsp;&nbsp;Wireshark packet analysis</span><span>10</span></div>
+    <div class="l2"><span>7.4&nbsp;&nbsp;Quantified result</span><span>13</span></div>
+    <div><span>8&nbsp;&nbsp;Expected vs. Actual: Differences and Why</span><span>14</span></div>
+    <div><span>9&nbsp;&nbsp;Defence Mechanisms</span><span>15</span></div>
+    <div class="l2"><span>9.1&nbsp;&nbsp;Detection</span><span>15</span></div>
+    <div class="l2"><span>9.2&nbsp;&nbsp;Prevention</span><span>15</span></div>
+    <div class="l2"><span>9.3&nbsp;&nbsp;Does the defence work as expected?</span><span>16</span></div>
+    <div><span>10&nbsp;&nbsp;Assumptions</span><span>18</span></div>
+    <div><span>11&nbsp;&nbsp;Conclusion</span><span>18</span></div>
+  </div>
+
+  <h3 style="margin-top:14px;">List of Figures</h3>
+  <div class="toc">
+    <div><span>1&nbsp;&nbsp;Lab network topology (three isolated subnets, one router).</span><span>4</span></div>
+    <div><span>2&nbsp;&nbsp;Timing/sequence diagram of the Smurf attack.</span><span>5</span></div>
+    <div><span>3&nbsp;&nbsp;Spoofed IPv4 + ICMP Echo Request packet layout.</span><span>6</span></div>
+    <div><span>4&nbsp;&nbsp;Attacker sending spoofed Smurf packets (Scapy).</span><span>8</span></div>
+    <div><span>5&nbsp;&nbsp;Victim during normal operation (quiet).</span><span>8</span></div>
+    <div><span>6&nbsp;&nbsp;Victim under attack: tcpdump flood of 60 replies.</span><span>9</span></div>
+    <div><span>7&nbsp;&nbsp;Victim intrusion alert: SMURF DETECTED (monitor.py).</span><span>10</span></div>
+    <div><span>8&nbsp;&nbsp;Wireshark: spoofed source (attacker capture).</span><span>11</span></div>
+    <div><span>9&nbsp;&nbsp;Wireshark: combined request + replies (1&#8594;6 pattern).</span><span>11</span></div>
+    <div><span>10&nbsp;&nbsp;Wireshark: victim flood of 60 replies.</span><span>12</span></div>
+    <div><span>11&nbsp;&nbsp;Wireshark: Conversations (six amplifiers &#8594; one victim).</span><span>12</span></div>
+    <div><span>12&nbsp;&nbsp;Wireshark: I/O Graph of amplification.</span><span>13</span></div>
+    <div><span>13&nbsp;&nbsp;Replies per amplifier at the victim (attack phase).</span><span>13</span></div>
+    <div><span>14&nbsp;&nbsp;Attack: Echo Replies arriving at the victim over time.</span><span>14</span></div>
+    <div><span>15&nbsp;&nbsp;Defense 1 in action: 10 sent vs. 0 received.</span><span>16</span></div>
+    <div><span>16&nbsp;&nbsp;Total replies per scenario: attack vs. defenses.</span><span>17</span></div>
+    <div><span>17&nbsp;&nbsp;Defense 4: ICMP rate limiting throttles the flood.</span><span>17</span></div>
+  </div>
+</div>
+
+<!-- ===================== 1. OVERVIEW ===================== -->
+<div class="page">
+  <h2>1&nbsp;&nbsp;Overview of the Project Idea</h2>
+  <p>A <b>Smurf attack</b> is a classic <b>reflection-and-amplification</b> denial-of-service (DoS) attack that
+  abuses the ICMP Echo (ping) mechanism together with IP directed broadcasts. The key idea is simple: a single
+  spoofed ICMP Echo Request, when addressed to a network's <b>directed broadcast address</b>, is delivered to
+  every host on that network. If <i>N</i> hosts respond, the victim receives up to <i>N</i> Echo Replies for one
+  attacker-generated request. Repeating this produces a many-to-one traffic pattern that can exhaust the
+  victim's bandwidth or packet-processing capacity.</p>
+
+  <p>Two properties make the attack work in combination:</p>
+  <ol>
+    <li><b>Source-address spoofing.</b> The attacker forges the source IP of the Echo Request to be the
+    <i>victim's</i> address, so every reply is sent to the victim rather than to the attacker.</li>
+    <li><b>Directed broadcast.</b> The request is addressed to a subnet broadcast (e.g. <code>203.0.113.255</code>),
+    so one packet reaches many "amplifier" hosts at once.</li>
+  </ol>
+
+  <div class="box">
+    <b>Project objective.</b> Reproduce the complete Smurf mechanism inside an <b>isolated, controlled Docker
+    laboratory</b>, <b>measure</b> the resulting amplification with real packet captures at the victim, and then
+    <b>implement and verify four defenses</b> that each neutralize the attack. All work was implemented by us
+    (Docker, Python/Scapy, iptables, tcpdump) and every claim is backed by captured evidence.</p>
+  </div>
+
+  <p><b>Summary of results.</b> In the isolated lab the attack succeeded: 10 spoofed requests produced
+  <b>60 Echo Replies</b> at the victim from <b>6 amplifier hosts</b> — a measured <b>6× amplification</b>. Every
+  defense worked: disabling directed-broadcast forwarding, ingress filtering, and broadcast-echo suppression each
+  reduced the reflected traffic reaching the victim to <b>zero</b>, and rate limiting sharply capped it.</p>
+</div>
+
+<!-- ===================== 2. BACKGROUND ===================== -->
+<div class="page">
+  <h2>2&nbsp;&nbsp;Background: ICMP Echo, Directed Broadcast, and Amplification</h2>
+  <p>The Internet Control Message Protocol (ICMP) provides control and diagnostic functions for IP. The
+  <code>ping</code> utility uses two ICMP messages: an <b>Echo Request (Type 8, Code 0)</b> and an
+  <b>Echo Reply (Type 0, Code 0)</b>. A host that receives an Echo Request normally answers with an Echo Reply
+  that copies the request's identifier, sequence number, and payload.</p>
+
+  <p>An IPv4 subnet has a <b>directed broadcast address</b> — the all-ones host part of the subnet. For
+  <code>203.0.113.0/24</code> that address is <code>203.0.113.255</code>. A router that forwards directed
+  broadcasts will deliver a packet aimed at that address to <i>every</i> host on the destination LAN. Combining
+  a spoofed source with a directed-broadcast destination is exactly the Smurf attack.</p>
+
+  <h3>Amplification model</h3>
+  <p>Let <i>R</i> be the attacker's rate of spoofed Echo Requests and <i>N</i> the number of amplifier hosts
+  that respond to each request. In an idealized lossless model the victim receives approximately</p>
+  <p class="center"><b>replies at victim ≈ R × N &nbsp; (packets per second)</b></p>
+  <p>This is an upper bound; packet loss, host rate limits, filtering, and incomplete participation reduce the
+  observed amplification. With <i>N</i> = 6 amplifiers our measured factor was exactly 6×, matching the model
+  under ideal lab conditions.</p>
+
+  <p>Historically the classic Smurf attack was highly effective. Modern networks defeat it by disabling
+  directed-broadcast forwarding (RFC 2644), suppressing broadcast Echo responses, and validating source
+  addresses at the network edge (BCP 38 / RFC 2827). This project demonstrates both the attack and these
+  standard mitigations.</p>
+</div>
+
+<!-- ===================== 3. TOPOLOGY ===================== -->
+<div class="page">
+  <h2>3&nbsp;&nbsp;Network Topology, Components and Timing Diagram</h2>
+
+  <h3>3.1&nbsp;&nbsp;Network topology</h3>
+  <p>The lab is built with Docker Compose as <b>nine containers</b> across <b>three isolated subnets</b> joined by
+  a single multi-homed <b>router</b> (Figure 1). All addresses use RFC 5737 documentation ranges and the lab has
+  <b>no route to the Internet</b> (the router carries no default route), so the attack cannot escape the sandbox.</p>
+
+  <figure>
+    <svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" font-family="Times New Roman, serif" font-size="12">
+      <!-- attacker -->
+      <rect x="20" y="140" width="120" height="52" fill="#fbe6e6" stroke="#7a1f1f"/>
+      <text x="80" y="162" text-anchor="middle" font-weight="bold">Attacker</text>
+      <text x="80" y="180" text-anchor="middle" font-size="10">10.0.0.9</text>
+      <!-- attacker net label -->
+      <text x="185" y="150" text-anchor="middle" font-size="9" fill="#555">attacker_net</text>
+      <text x="185" y="162" text-anchor="middle" font-size="9" fill="#555">10.0.0.0/24</text>
+      <line x1="140" y1="166" x2="250" y2="166" stroke="#333"/>
+      <!-- router -->
+      <rect x="250" y="132" width="120" height="68" fill="#e8eef7" stroke="#2c4a7a"/>
+      <text x="310" y="158" text-anchor="middle" font-weight="bold">Router</text>
+      <text x="310" y="173" text-anchor="middle" font-size="9">multi-homed</text>
+      <text x="310" y="187" text-anchor="middle" font-size="8">IP + broadcast forwarding</text>
+      <!-- to amplifier -->
+      <line x1="370" y1="150" x2="480" y2="80" stroke="#333"/>
+      <rect x="370" y="103" width="122" height="14" fill="#ffffff"/>
+      <text x="431" y="113" text-anchor="middle" font-size="9" fill="#555">amplifier_net 203.0.113.0/24</text>
+      <!-- to victim -->
+      <line x1="370" y1="182" x2="480" y2="255" stroke="#333"/>
+      <rect x="371" y="214" width="116" height="14" fill="#ffffff"/>
+      <text x="429" y="224" text-anchor="middle" font-size="9" fill="#555">victim_net 198.51.100.0/24</text>
+      <!-- amplifiers -->
+      <rect x="480" y="30" width="220" height="90" fill="#eaf6ea" stroke="#1e6b32"/>
+      <text x="590" y="50" text-anchor="middle" font-weight="bold">Amplifiers H1–H6</text>
+      <text x="590" y="68" text-anchor="middle" font-size="10">203.0.113.11 … 203.0.113.16</text>
+      <text x="590" y="90" text-anchor="middle" font-size="9">respond to broadcast → reflect to victim</text>
+      <text x="590" y="108" text-anchor="middle" font-size="9">directed broadcast: 203.0.113.255</text>
+      <!-- victim -->
+      <rect x="480" y="245" width="220" height="60" fill="#fff3d6" stroke="#8a6d1a"/>
+      <text x="590" y="268" text-anchor="middle" font-weight="bold">Victim</text>
+      <text x="590" y="286" text-anchor="middle" font-size="10">198.51.100.10 (absorbs the flood)</text>
+    </svg>
+    <figcaption>Figure 1: Lab network topology — attacker, multi-homed router, six amplifier hosts, and the victim, on three isolated subnets.</figcaption>
+  </figure>
+
+  <h3>3.2&nbsp;&nbsp;Components</h3>
+  <table>
+    <tr><th>Role</th><th>Container(s)</th><th>Address(es)</th><th>Function</th></tr>
+    <tr><td>Attacker</td><td><code>attacker</code></td><td>10.0.0.9</td><td>Generates spoofed ICMP Echo Requests using Scapy.</td></tr>
+    <tr><td>Router</td><td><code>router</code></td><td>10.0.0.2 / 203.0.113.254 / 198.51.100.2</td><td>Routes between all three subnets; forwards the directed broadcast; hosts most defenses.</td></tr>
+    <tr><td>Amplifiers</td><td><code>amp-h1</code> … <code>amp-h6</code></td><td>203.0.113.11–16</td><td>Answer broadcast Echo Requests, reflecting replies to the victim.</td></tr>
+    <tr><td>Victim</td><td><code>victim</code></td><td>198.51.100.10</td><td>Target; captures and analyzes the reflected traffic (tcpdump).</td></tr>
+  </table>
+
+  <h3>3.3&nbsp;&nbsp;Timing (sequence) diagram</h3>
+  <figure>
+    <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" font-family="Times New Roman, serif" font-size="11">
+      <!-- lifelines -->
+      <g stroke="#999" stroke-dasharray="3,3">
+        <line x1="70"  y1="42" x2="70"  y2="292"/>
+        <line x1="270" y1="42" x2="270" y2="292"/>
+        <line x1="470" y1="42" x2="470" y2="292"/>
+        <line x1="650" y1="42" x2="650" y2="292"/>
+      </g>
+      <!-- heads -->
+      <g font-weight="bold" text-anchor="middle">
+        <rect x="20" y="18" width="100" height="24" fill="#fbe6e6" stroke="#7a1f1f"/><text x="70" y="35">Attacker</text>
+        <rect x="220" y="18" width="100" height="24" fill="#e8eef7" stroke="#2c4a7a"/><text x="270" y="35">Router</text>
+        <rect x="410" y="18" width="120" height="24" fill="#eaf6ea" stroke="#1e6b32"/><text x="470" y="35">Amplifiers</text>
+        <rect x="600" y="18" width="100" height="24" fill="#fff3d6" stroke="#8a6d1a"/><text x="650" y="35">Victim</text>
+      </g>
+      <!-- arrows -->
+      <defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#333"/></marker></defs>
+      <g stroke="#333" marker-end="url(#a)">
+        <line x1="70" y1="92" x2="268" y2="92"/>
+        <line x1="270" y1="146" x2="468" y2="146"/>
+        <line x1="470" y1="206" x2="648" y2="206"/>
+        <line x1="470" y1="234" x2="648" y2="234"/>
+        <line x1="470" y1="262" x2="648" y2="262"/>
+      </g>
+      <g font-size="10" fill="#333">
+        <text x="88" y="84">1 spoofed Echo Req (src=victim, dst=203.0.113.255)</text>
+        <text x="288" y="138">forwards directed broadcast to all H1–H6</text>
+        <text x="488" y="198">Echo Reply → victim (×6)</text>
+        <text x="488" y="254">… one reply per amplifier</text>
+      </g>
+      <text x="360" y="310" text-anchor="middle" font-size="10" fill="#7a1f1f" font-weight="bold">1 request in  →  6 replies out (amplification)</text>
+    </svg>
+    <figcaption>Figure 2: Timing/sequence diagram. One spoofed request fans out through the router to six amplifiers, each of which replies to the spoofed victim.</figcaption>
+  </figure>
+</div>
+
+<!-- ===================== 4. PACKET STRUCTURE ===================== -->
+<div class="page">
+  <h2>4&nbsp;&nbsp;Packet and Frame Structure</h2>
+  <p>The attack packet is an ordinary ICMP Echo Request carried in an IPv4 packet inside an Ethernet frame. Two
+  fields are manipulated: the IPv4 <b>source address</b> (set to the victim) and the IPv4 <b>destination
+  address</b> (set to the directed broadcast). The highlighted cells below are the crafted fields.</p>
+
+  <h3>4.1&nbsp;&nbsp;Ethernet frame (Layer 2)</h3>
+  <table>
+    <tr><th>Destination MAC</th><th>Source MAC</th><th>EtherType</th><th>Payload</th><th>FCS</th></tr>
+    <tr><td>router's MAC (next hop)</td><td>attacker's MAC</td><td>0x0800 (IPv4)</td><td>IPv4 packet (below)</td><td>CRC</td></tr>
+  </table>
+
+  <h3>4.2&nbsp;&nbsp;IPv4 header (Layer 3)</h3>
+  <table class="hdr-fields">
+    <tr><td>Version (4)</td><td>IHL</td><td>DSCP/ECN</td><td colspan="2">Total Length</td></tr>
+    <tr><td colspan="2">Identification</td><td>Flags</td><td colspan="2">Fragment Offset</td></tr>
+    <tr><td>TTL (64)</td><td>Protocol = 1 (ICMP)</td><td colspan="3">Header Checksum</td></tr>
+    <tr><td colspan="5" class="hl">Source Address = 198.51.100.10 &nbsp;(SPOOFED — the victim)</td></tr>
+    <tr><td colspan="5" class="hl">Destination Address = 203.0.113.255 &nbsp;(DIRECTED BROADCAST)</td></tr>
+  </table>
+
+  <h3>4.3&nbsp;&nbsp;ICMP Echo Request / Reply (Layer 4 payload)</h3>
+  <table class="hdr-fields">
+    <tr><td class="hl">Type = 8 (Request) / 0 (Reply)</td><td>Code = 0</td><td colspan="2">Checksum</td></tr>
+    <tr><td colspan="2">Identifier (0x534D)</td><td colspan="2">Sequence Number</td></tr>
+    <tr><td colspan="4">Payload data (configurable size, e.g. 64 bytes)</td></tr>
+  </table>
+
+  <figure>
+    <svg viewBox="0 0 700 120" xmlns="http://www.w3.org/2000/svg" font-family="Times New Roman, serif" font-size="11">
+      <rect x="10"  y="30" width="150" height="46" fill="#eef2f7" stroke="#555"/><text x="85" y="52" text-anchor="middle">Ethernet</text><text x="85" y="68" text-anchor="middle" font-size="9">dst=router MAC</text>
+      <rect x="160" y="30" width="220" height="46" fill="#fbe6e6" stroke="#7a1f1f"/><text x="270" y="50" text-anchor="middle">IPv4</text><text x="270" y="66" text-anchor="middle" font-size="9">src=VICTIM · dst=203.0.113.255</text>
+      <rect x="380" y="30" width="180" height="46" fill="#eaf6ea" stroke="#1e6b32"/><text x="470" y="50" text-anchor="middle">ICMP</text><text x="470" y="66" text-anchor="middle" font-size="9">Type 8, Echo Request</text>
+      <rect x="560" y="30" width="120" height="46" fill="#fff3d6" stroke="#8a6d1a"/><text x="620" y="52" text-anchor="middle">Payload</text><text x="620" y="68" text-anchor="middle" font-size="9">64 B</text>
+    </svg>
+    <figcaption>Figure 3: Layout of the crafted attack packet. Only the IPv4 source and destination are manipulated; the rest is a normal ping.</figcaption>
+  </figure>
+
+  <div class="box small">Because the RST-free reflection lives entirely in ICMP/IP, no application-layer state is
+  needed: the amplifiers reply purely based on IP/ICMP, and every reply is directed at the spoofed source.</div>
+</div>
+
+<!-- ===================== 5. IMPLEMENTATION PLAN ===================== -->
+<div class="page">
+  <h2>5&nbsp;&nbsp;Implementation Plan</h2>
+  <p>The lab and experiment were implemented as code so they are fully reproducible.</p>
+
+  <h3>5.1&nbsp;&nbsp;Environment (Docker Compose)</h3>
+  <ul>
+    <li>Nine containers and three <b>bridge</b> networks defined in <code>docker-compose.yml</code>.</li>
+    <li>The router enables <code>net.ipv4.ip_forward=1</code> and <code>net.ipv4.conf.*.bc_forwarding=1</code>
+    so it forwards the directed broadcast; it deletes its default route so the lab stays offline.</li>
+    <li>Amplifiers answer broadcast pings (<code>icmp_echo_ignore_broadcasts=0</code>); each endpoint routes
+    cross-subnet traffic through the router.</li>
+  </ul>
+
+  <h3>5.2&nbsp;&nbsp;Attack tool (Python + Scapy)</h3>
+  <p>The attacker runs <code>smurf_attack.py</code>, which crafts each packet as
+  <code>IP(src=victim, dst=broadcast)/ICMP(type=8)/payload</code> and transmits it at a configurable rate and
+  count. A <i>baseline</i> mode sends normal (non-spoofed) pings for comparison.</p>
+
+  <h3>5.3&nbsp;&nbsp;Experiment phases</h3>
+  <table>
+    <tr><th>Phase</th><th>Action</th><th>Purpose</th></tr>
+    <tr><td>1. Baseline</td><td>Normal ICMP echo</td><td>Reference for "normal" traffic.</td></tr>
+    <tr><td>2. Fan-out</td><td>Non-spoofed broadcast ping</td><td>Verify directed broadcast reaches all amplifiers.</td></tr>
+    <tr><td>3. Attack</td><td>Spoofed broadcast (src = victim)</td><td>Demonstrate reflection + amplification.</td></tr>
+    <tr><td>4. Defenses</td><td>Enable each defense, re-run attack</td><td>Measure each defense's effect.</td></tr>
+    <tr><td>5. Analysis</td><td>Parse captures, generate plots</td><td>Quantify results and produce figures.</td></tr>
+  </table>
+  <p>The whole sequence is orchestrated by <code>run_experiment.sh</code>; captures are taken on the victim with
+  <code>tcpdump</code> and analyzed with Scapy/matplotlib.</p>
+
+  <div class="box small"><b>Tooling summary:</b> Docker &amp; Docker Compose (topology), Python 3 + Scapy (packet
+  crafting and analysis), iptables and Linux sysctls (defenses and routing), tcpdump (capture), matplotlib (plots).</div>
+</div>
+
+<!-- ===================== 6. EXPECTED OUTCOME ===================== -->
+<div class="page">
+  <h2>6&nbsp;&nbsp;Expected Outcome of a Successful Attack</h2>
+  <p>While the router forwards the directed broadcast and the amplifiers answer broadcast pings, a successful
+  attack should show:</p>
+  <ul>
+    <li><b>Amplification:</b> for each spoofed request the victim should receive up to <i>N</i> = 6 Echo Replies —
+    a 6× multiplication of the attacker's traffic.</li>
+    <li><b>Reflection / anonymity:</b> the replies at the victim originate from the <b>amplifier hosts</b>
+    (203.0.113.11–16), never from the attacker — the true origin is hidden.</li>
+    <li><b>Victim-directed flooding:</b> all replies target the spoofed source (the victim), so sustained sending
+    would consume the victim's inbound capacity.</li>
+    <li><b>Baseline contrast:</b> during normal operation the victim should see essentially no unsolicited ICMP;
+    under attack it should see a sharp burst from multiple sources.</li>
+  </ul>
+  <div class="kpi">
+    <div><div class="n">10</div><div class="t">requests sent</div></div>
+    <div><div class="n">6</div><div class="t">amplifiers</div></div>
+    <div><div class="n">60</div><div class="t">replies expected</div></div>
+    <div><div class="n">6×</div><div class="t">amplification</div></div>
+  </div>
+</div>
+
+<!-- ===================== 7. ACTUAL OUTCOME ===================== -->
+<div class="page">
+  <h2>7&nbsp;&nbsp;Actual Outcome and Observations</h2>
+  <p>The measured result matched the model exactly: <b>10</b> spoofed Echo Requests produced <b>60</b> Echo
+  Replies at the victim — a clean <b>6× amplification</b>. Below the evidence is presented end-to-end, captured on
+  each host in turn: the attacker launching the spoofed traffic, the amplifiers reflecting it, and the victim
+  absorbing the flood.</p>
+
+  <h3>7.1&nbsp;&nbsp;Launching the attack (attacker)</h3>
+  <p>The attacker runs the Scapy generator, forging the source address to the victim and aiming each request at
+  the amplifier broadcast (Figure 4).</p>
+
+  <figure>
+    <img src="screenshots/my_attacker_attack.png" alt="Attacker sending spoofed packets" style="max-width:82%;">
+    <figcaption>Figure 4: Attacker crafting and sending spoofed Smurf packets with Scapy — source = victim (198.51.100.10), destination = 203.0.113.255; 10 packets sent.</figcaption>
+  </figure>
+
+  <h3>7.2&nbsp;&nbsp;The victim's live view</h3>
+  <p>During normal operation the victim sees no unsolicited ICMP (Figure 5). The moment the attack starts, the
+  victim is flooded with Echo Replies arriving from all six amplifiers (Figure 6), and the victim-side intrusion
+  monitor raises a <b>SMURF DETECTED</b> alert because many unsolicited replies arrive from multiple sources with
+  zero matching outbound requests (Figure 7).</p>
+
+  <figure>
+    <img src="screenshots/my_victim_baseline.png" alt="Victim baseline (quiet)" style="max-width:86%;">
+    <figcaption>Figure 5: Victim during normal operation — <code>tcpdump</code> shows <b>0 packets captured</b>; the host is idle.</figcaption>
+  </figure>
+
+  <figure>
+    <div style="display:flex; gap:8px; justify-content:center; align-items:flex-start;">
+      <img src="screenshots/my_victim_attack_1.png" alt="Victim flood start" style="max-width:49%;">
+      <img src="screenshots/my_victim_attack_2.png" alt="Victim flood end" style="max-width:49%;">
+    </div>
+    <figcaption>Figure 6: Victim under attack — <code>tcpdump</code> records the flood of Echo Replies from all six amplifier hosts (203.0.113.11–16). Left: the capture command and the start of the flood. Right: the flood continuing and ending with <b>60 packets captured</b> (10 spoofed requests × 6 amplifiers).</figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/my_victim_ids_1.png" alt="IDS live detection" style="max-width:80%;">
+    <img src="screenshots/my_victim_ids_2.png" alt="IDS monitoring summary" style="max-width:80%; margin-top:8px;">
+    <figcaption>Figure 7: Victim-side detection with <code>monitor.py</code>. Top — the monitor escalates from NORMAL through ATTACK to CRITICAL <b>SMURF DETECTED</b> and REFLECTION PATTERN alerts (6 unique sources, 0 outbound requests). Bottom — the monitoring summary: 60 Echo Replies received, 113 alerts triggered, amplification ratio ∞ (no outbound requests), <b>Attack detected: YES</b>.</figcaption>
+  </figure>
+
+  <h3>7.3&nbsp;&nbsp;Wireshark packet analysis</h3>
+  <p>The captured traffic was analysed in <b>Wireshark</b> (packets saved as <code>.pcap</code> files). The
+  attacker-side capture proves the spoofing — every outbound Echo Request lists the <b>victim's</b> address in the
+  Source column while the destination is the directed broadcast (Figure 8). A combined capture shows the complete
+  cycle in one packet list: each spoofed request is followed immediately by six Echo Replies to the victim
+  (Figure 9). The victim-side capture is a continuous flood of replies from the six amplifier hosts (Figure 10),
+  and the <b>Statistics → Conversations</b> view confirms six one-directional conversations, each carrying ten
+  packets to the single victim (Figure 11). Finally, Wireshark's <b>I/O Graph</b> makes the amplification factor
+  visible over time: the reply rate is roughly six times the request rate (Figure 12).</p>
+
+  <figure>
+    <img src="screenshots/ws_attacker_spoofed.png" alt="Wireshark: spoofed source" style="max-width:96%;">
+    <figcaption>Figure 8: Wireshark (attacker capture) — the Source column falsely shows the victim <code>198.51.100.10</code>; the destination is the directed broadcast <code>203.0.113.255</code>. The payload spells "SMURF", and "no response found" reflects that the attacker never receives the replies.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/ws_combined.png" alt="Wireshark: combined request and replies" style="max-width:96%;">
+    <figcaption>Figure 9: Wireshark (combined capture) — one Echo Request (to the broadcast) is followed by six Echo Replies to the victim, and the pattern repeats: the 1→6 amplification seen packet-by-packet.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/ws_victim_flood.png" alt="Wireshark: victim flood" style="max-width:96%;">
+    <figcaption>Figure 10: Wireshark (victim capture) — 60 Echo Replies from the six amplifier hosts (203.0.113.11–16), all destined to the victim, arriving in bursts of six per sequence number.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/ws_conversations.png" alt="Wireshark: conversations" style="max-width:96%;">
+    <figcaption>Figure 11: Wireshark Conversations (IPv4) — six conversations, each amplifier → victim with 10 packets. Packets B→A = 0 shows the traffic is entirely one-directional: the victim only receives.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/ws_io_graph.png" alt="Wireshark: I/O graph" style="max-width:96%;">
+    <figcaption>Figure 12: Wireshark I/O Graph — Echo Requests (green) versus Echo Replies (red) over time. The reply rate is about 6× the request rate, quantifying the amplification.</figcaption>
+  </figure>
+
+  <h3>7.4&nbsp;&nbsp;Quantified result</h3>
+  <p>Aggregating the victim capture, each of the six amplifiers contributed exactly <b>10</b> replies for the
+  <b>10</b> requests sent — a clean <b>6× amplification</b> (Figure 13). Every reply originated from an amplifier
+  (203.0.113.11–16); none came from the attacker, confirming the reflection property.</p>
+
+  <figure>
+    <img src="results/attack_20260917_070538_sources.png" alt="Replies per amplifier">
+    <figcaption>Figure 13: Replies received at the victim per amplifier during the attack — 10 from each of the six hosts (60 total).</figcaption>
+  </figure>
+
+  <p>Viewed over time, the 60 replies arrive in tight bursts — six per spoofed request (one from each amplifier)
+  — as shown in Figure 14.</p>
+
+  <figure>
+    <img src="results/attack_timeline.png" alt="Attack reply timeline">
+    <figcaption>Figure 14: Echo Replies arriving at the victim over time during the attack — a burst of six (one per amplifier) for every spoofed request, 60 replies in about two seconds.</figcaption>
+  </figure>
+
+  <table>
+    <tr><th>Scenario</th><th>Echo Replies at victim</th><th>Unique amplifier sources</th><th>Observation</th></tr>
+    <tr><td>Baseline (normal ICMP)</td><td>0</td><td>0</td><td>Normal; victim not involved.</td></tr>
+    <tr><td><b>Smurf attack (no defense)</b></td><td><b>60</b></td><td><b>6</b></td><td>Full 6× amplification.</td></tr>
+  </table>
+</div>
+
+<!-- ===================== 8. EXPECTED VS ACTUAL ===================== -->
+<div class="page">
+  <h2>8&nbsp;&nbsp;Expected vs. Actual: Differences and Why</h2>
+  <p>The measured behaviour closely matched the predictions of Section 6. The table below compares the expected
+  and observed outcomes and explains the few differences.</p>
+  <table>
+    <tr><th>Aspect</th><th>Expected</th><th>Actual (measured)</th><th>Difference / why</th></tr>
+    <tr><td>Amplification factor</td><td>up to 6× (N = 6)</td><td>exactly 6×</td><td>None — the isolated lab is lossless and every amplifier participated, so the ideal upper bound was reached.</td></tr>
+    <tr><td>Replies at the victim</td><td>up to 60 for 10 requests</td><td>60</td><td>None — all six amplifiers answered every request.</td></tr>
+    <tr><td>Reply sources</td><td>the six amplifiers</td><td>203.0.113.11–16 only</td><td>None — no reply came from the attacker, confirming reflection.</td></tr>
+    <tr><td>Baseline traffic at victim</td><td>≈ 0 unsolicited ICMP</td><td>0</td><td>None — normal traffic does not traverse the victim.</td></tr>
+    <tr><td>Defenses 1–3</td><td>block the attack</td><td>0 replies</td><td>None — each removes one enabling condition entirely.</td></tr>
+    <tr><td>Rate limiting (Defense 4)</td><td>reduced, not zero</td><td>20 of 60</td><td>As expected — iptables <code>--limit</code> with a burst allows a bounded number through; it caps volume rather than removing the reflection path.</td></tr>
+  </table>
+  <p><b>Why so few differences?</b> A real Internet-scale Smurf attack suffers packet loss, host rate limits, and
+  only partial amplifier participation, all of which push the observed amplification below the ideal. Our
+  controlled single-host lab has none of these, so the measured factor equals the theoretical maximum. The one
+  non-trivial gap — rate limiting letting 20 packets through instead of 0 — is the expected behaviour of a
+  mitigation (rather than a prevention): a defence-in-depth control that bounds impact without removing the
+  underlying reflection path.</p>
+</div>
+
+<!-- ===================== 9. DEFENCE ===================== -->
+<div class="page">
+  <h2>9&nbsp;&nbsp;Defence Mechanisms</h2>
+  <p>Defence has two complementary parts: <b>detection</b> — recognising that an attack is under way — and
+  <b>prevention</b> — stopping the attack from reaching the victim. Both were implemented and tested.</p>
+
+  <h3>9.1&nbsp;&nbsp;Detection</h3>
+  <p>The victim runs a lightweight intrusion monitor (<code>monitor.py</code>) that sniffs incoming ICMP and
+  flags the reflection signature: a burst of unsolicited Echo Replies from many distinct sources with no matching
+  outbound requests. During the attack it escalated from NORMAL to a CRITICAL <b>SMURF DETECTED</b> alert within
+  milliseconds and reported an amplification ratio of ∞ (60 replies in, 0 requests out) — see Figure 7. Detection
+  does not stop the attack, but it is what triggers an operator, or an automated response, to apply the preventive
+  controls below.</p>
+
+  <h3>9.2&nbsp;&nbsp;Prevention</h3>
+  <p>Four preventive controls were tested, each enabled individually while re-running the identical attack.
+  Defenses 1–3 remove an enabling condition of the attack; Defense 4 is a mitigation.</p>
+  <p><b>Defense 1 — Disable directed-broadcast forwarding (router, RFC 2644).</b> The router drops packets
+  destined to the amplifier broadcast (<code>203.0.113.255</code>), so the request never fans out. This is the
+  root-cause fix and is the default on modern routers.</p>
+  <p><b>Defense 2 — Ingress filtering / source validation (router, BCP 38 / RFC 2827).</b> The router enables
+  strict reverse-path filtering and drops packets arriving on the attacker network whose source address does not
+  belong there (e.g. a packet claiming to be from <code>198.51.100.10</code>). This removes spoofing, the
+  precondition of all reflection attacks.</p>
+  <p><b>Defense 3 — Suppress broadcast Echo replies (amplifiers).</b> Each amplifier sets
+  <code>net.ipv4.icmp_echo_ignore_broadcasts = 1</code> and ignores pings sent to a broadcast address, removing
+  itself from the reflection pool.</p>
+  <p><b>Defense 4 — ICMP rate limiting (router).</b> The router caps the rate of forwarded ICMP Echo Replies with
+  iptables <code>--limit</code>. This does not remove the reflection path but bounds the volume that can reach the
+  victim — a secondary, defence-in-depth control.</p>
+
+  <h3>9.3&nbsp;&nbsp;Does the defence work as expected?</h3>
+  <p>With each of Defenses 1–3 enabled, the victim received <b>0</b> replies; the attack was completely blocked.
+  Figure 15 shows Defense 1 in action: the attacker still transmits all 10 spoofed requests, but the router's
+  directed-broadcast DROP rule stops the reflection, so the victim's capture records zero packets — a clean
+  <b>10 sent, 0 received</b> contrast. Figure 16 compares all scenarios, and Figure 17 shows how rate limiting
+  (Defense 4) throttles the reflected flood — to 20 of 60 replies here — but, as expected, does not eliminate it,
+  confirming it is a mitigation rather than a cure.</p>
+
+  <figure>
+    <div style="display:flex; gap:8px; justify-content:center; align-items:flex-start;">
+      <img src="screenshots/my_attacker_attack.png" alt="Attacker sends 10" style="max-width:49%;">
+      <img src="screenshots/defense_blocked.png" alt="Victim receives 0" style="max-width:49%;">
+    </div>
+    <figcaption>Figure 15: Defense 1 in action. Left — the attacker sends 10 spoofed requests. Right — with directed-broadcast forwarding disabled on the router, the victim's <code>tcpdump</code> records <b>0 packets captured</b>. The reflection is stopped at the router.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="results/defense_comparison.png" alt="Defense comparison">
+    <figcaption>Figure 16: Total Echo Replies at the victim by scenario (left) and number of participating amplifiers (right). The attack yields 60 replies from 6 sources; defenses 1–3 yield 0; rate limiting only caps the volume (20 of 60 here).</figcaption>
+  </figure>
+
+  <figure>
+    <img src="results/ratelimit_timeline.png" alt="Rate limiting timeline">
+    <figcaption>Figure 17: Defense 4 (ICMP rate limiting) over time — compared with the unmitigated flood (60), rate limiting throttles the replies reaching the victim to 20, capping the volume without removing the reflection path.</figcaption>
+  </figure>
+
+  <table>
+    <tr><th>Defense</th><th>Layer / where</th><th>Replies at victim</th><th>Verdict</th></tr>
+    <tr><td>1. Disable broadcast fwd</td><td>Router</td><td>0</td><td>Fully blocks</td></tr>
+    <tr><td>2. Ingress filtering</td><td>Router</td><td>0</td><td>Fully blocks</td></tr>
+    <tr><td>3. Suppress broadcast echo</td><td>Amplifiers</td><td>0</td><td>Fully blocks</td></tr>
+    <tr><td>4. ICMP rate limiting</td><td>Router</td><td>capped (partial)</td><td>Mitigates</td></tr>
+  </table>
+
+  <p><b>Verdict.</b> Yes — the defences behave as expected. The strongest, most general one is ingress filtering
+  (Defense 2), because it stops the spoofing that underlies all reflection attacks. Disabling broadcast forwarding
+  (Defense 1) is the most direct fix for Smurf specifically. A real deployment would combine detection with several
+  of these preventions (defence in depth).</p>
+</div>
+
+<!-- ===================== 10. ASSUMPTIONS ===================== -->
+<div class="page">
+  <h2>10&nbsp;&nbsp;Assumptions</h2>
+  <ul>
+    <li>The experiment runs only inside the isolated Docker lab; there is no path to any external network.</li>
+    <li>Amplifier hosts answer ICMP Echo Requests sent to a broadcast address (default Linux behavior when
+    <code>icmp_echo_ignore_broadcasts=0</code>).</li>
+    <li>The router is configured to forward directed broadcasts (which itself models a legacy, misconfigured
+    router — the very condition Defense 1 removes).</li>
+    <li>Addresses use RFC 5737 documentation ranges; results scale with the number of amplifiers <i>N</i>.</li>
+    <li>Containers are granted the privileges needed to set network sysctls at runtime, which is required only for
+    toggling defenses during the experiment and does not affect the attack's validity.</li>
+  </ul>
+
+  <h2>11&nbsp;&nbsp;Conclusion</h2>
+  <p>We reproduced the classic ICMP Smurf attack end-to-end in a safe, isolated, fully scripted environment and
+  measured a clean <b>6× amplification</b> (10 spoofed requests → 60 reflected replies at the victim from six
+  amplifiers). We then implemented detection (a live intrusion monitor) and four standard preventive defenses, and
+  verified with packet captures that three of them (disabling directed-broadcast forwarding, ingress filtering, and
+  broadcast-echo suppression) reduce the attack to zero, while rate limiting bounds its impact. Although the
+  original Smurf attack is largely obsolete on modern networks precisely because these mitigations are now defaults,
+  the underlying reflection-and-amplification principle remains central to contemporary DDoS attacks (DNS, NTP, and
+  memcached amplification). Understanding and measuring it — and confirming that source-address validation is the
+  decisive general defense — is the core lesson of this project.</p>
+
+  <p class="small" style="margin-top:26px; text-align:center; color:#666;">— End of Report —</p>
+</div>
+
+</body>
+</html>

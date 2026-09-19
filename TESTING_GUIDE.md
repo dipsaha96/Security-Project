@@ -1,386 +1,267 @@
 # ICMP Smurf Attack — Testing Guide
 
-> Complete step-by-step instructions to build, run, and verify every phase of the project.
+Complete, from-scratch instructions to build, run, and verify every part of the project,
+including the live attack, the four defenses, victim-side evidence, and Wireshark analysis.
+
+All addresses use RFC 5737 documentation ranges. The lab is fully isolated (no Internet access).
 
 ---
 
-## Prerequisites
+## 0. What you are testing
 
-| Requirement | Check Command |
+| Goal | How it's proven |
+|------|-----------------|
+| The Smurf attack works | 10 spoofed requests → **60** replies at the victim (6× amplification) |
+| Reflection / spoofing | Replies come from 6 amplifiers; requests carry the **victim's** IP as source |
+| Each defense works | With a defense on, replies reaching the victim drop to **0** (rate-limit: reduced) |
+| Isolation | The lab cannot reach the Internet |
+
+---
+
+## 1. Prerequisites
+
+| Requirement | Check command |
 |-------------|---------------|
-| Docker | `docker --version` |
-| Docker Compose | `docker compose version` |
-| Docker running | `docker info` |
+| Docker Desktop running | `docker info` |
+| Docker Compose v2 | `docker compose version` |
+| (For Wireshark step) Wireshark | `brew install --cask wireshark` |
 
----
-
-## Step 1: Build All Containers
+Work from the project root:
 
 ```bash
 cd "/Users/dipsaha/Documents/4-1/CSE 406/Project"
-docker compose build
 ```
-
-This builds 4 images (attacker, router, amplifier, victim). First build takes ~2-3 minutes.
 
 ---
 
-## Step 2: Start the Lab
+## 2. Build and start the lab
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-Verify all 9 containers are running:
+This builds 4 images and starts **9 containers**. Verify:
 
 ```bash
 docker compose ps
 ```
 
-Expected output — all containers should show **running**:
+All 9 should show **Up**:
 
-| Container | IP Address | Role |
-|-----------|-----------|------|
-| `attacker` | 10.0.0.9 | Generates spoofed traffic |
-| `router` | 10.0.0.1 / 203.0.113.254 / 198.51.100.1 | Multi-homed border router |
-| `amp-h1` | 203.0.113.1 | Amplifier host |
-| `amp-h2` | 203.0.113.2 | Amplifier host |
-| `amp-h3` | 203.0.113.3 | Amplifier host |
-| `amp-h4` | 203.0.113.4 | Amplifier host |
-| `amp-h5` | 203.0.113.5 | Amplifier host |
-| `amp-h6` | 203.0.113.6 | Amplifier host |
-| `victim` | 198.51.100.10 | Target of reflected replies |
+| Container | Address(es) | Role |
+|-----------|-------------|------|
+| `attacker` | 10.0.0.9 | Generates spoofed ICMP (Scapy) |
+| `router`   | 10.0.0.2 · 203.0.113.254 · 198.51.100.2 | Multi-homed router; hosts most defenses |
+| `amp-h1`…`amp-h6` | 203.0.113.11 … 203.0.113.16 | Amplifier hosts |
+| `victim`   | 198.51.100.10 | Target; captures the flood |
+
+> If `docker compose up` ever prints **"Address already in use"**, it's a stale network from a
+> previous run. Fix: `docker compose down` then `docker compose up -d` again.
 
 ---
 
-## Step 3: Verify Network Connectivity
-
-Run these commands to confirm all nodes can communicate:
+## 3. Verify connectivity and isolation
 
 ```bash
-# Attacker → Router
-docker exec attacker ping -c 2 10.0.0.1
+# Cross-subnet routing works (through the router)
+docker exec attacker ping -c1 -W2 198.51.100.10     # attacker -> victim
+docker exec attacker ping -c1 -W2 203.0.113.11      # attacker -> amplifier
+docker exec victim   ping -c1 -W2 203.0.113.16      # victim   -> amplifier
 
-# Router → Amplifier H1
-docker exec router ping -c 2 203.0.113.1
-
-# Router → Victim
-docker exec router ping -c 2 198.51.100.10
-
-# Attacker → Amplifier (through router)
-docker exec attacker ping -c 2 203.0.113.1
-
-# Attacker → Victim (through router)
-docker exec attacker ping -c 2 198.51.100.10
+# Isolation: these MUST fail (no Internet)
+docker exec attacker ping -c1 -W3 8.8.8.8           # expect 100% loss / unreachable
 ```
 
-✅ **Pass**: All pings show `0% packet loss`.
+Expected: the first three succeed (0% loss); the Internet ping fails.
 
 ---
 
-## Step 4: Run the Full Experiment (Automatic)
-
-The quickest way — runs all 5 phases automatically:
+## 4. Run the full experiment (one command)
 
 ```bash
 ./run_experiment.sh all
 ```
 
-This executes:
-1. **Baseline** — normal ICMP ping (one-to-one)
-2. **Fan-out** — broadcast delivery verification
-3. **Attack** — Smurf attack demonstration
-4. **Defense** — tests all 4 defenses one by one
-5. **Analysis** — parses captures and generates charts
+This runs all phases in order and finishes with exit code 0:
 
-Total time: ~3-4 minutes.
+| Phase | What it does | Expected |
+|-------|--------------|----------|
+| 1. Baseline | Normal ICMP | victim capture ~0 (traffic doesn't cross victim) |
+| 2. Fan-out | Non-spoofed broadcast ping | confirms broadcast reaches amplifiers |
+| 3. Attack | Spoofed broadcast (src = victim) | **60 packets** at victim (6×) |
+| 4. Defenses | Each defense on, attack re-run | replies at victim → **0** (rate-limit: reduced) |
+| 5. Analysis | Parse pcaps, make plots | figures written to `results/` |
 
-You can also run individual phases:
+Run individual phases if you prefer:
 
 ```bash
-./run_experiment.sh baseline    # Phase 1 only
-./run_experiment.sh fanout      # Phase 2 only
-./run_experiment.sh attack      # Phase 3 only
-./run_experiment.sh defense     # Phase 4 only
-./run_experiment.sh analyze     # Phase 5 only
+./run_experiment.sh baseline
+./run_experiment.sh attack
+./run_experiment.sh defense
+./run_experiment.sh analyze
+```
+
+Outputs:
+- Packet captures → `captures/*.pcap`
+- Plots → `results/*.png` (per-amplifier, timeline, `defense_comparison.png`)
+
+---
+
+## 5. Manual attack demo (for a live viva)
+
+Open two terminals.
+
+**Terminal 1 — the victim's screen** (leave it running):
+```bash
+docker exec -it victim tcpdump -ni eth0 icmp
+```
+
+**Terminal 2 — launch the attack:**
+```bash
+docker exec attacker python3 /scripts/smurf_attack.py --mode attack \
+  --victim-ip 198.51.100.10 --broadcast-ip 203.0.113.255 --rate 5 --count 10
+```
+
+Terminal 1 will flood with Echo Replies from `203.0.113.11`–`.16`. Ten requests → sixty replies.
+
+**Intrusion-detection view** (instead of raw tcpdump):
+```bash
+docker exec -it victim python3 /scripts/monitor.py \
+  --threshold 5 --sources-threshold 3 --window 5
+```
+It escalates to a **SMURF DETECTED** alert during the attack.
+
+---
+
+## 6. Capture the victim "screens" (report screenshots)
+
+One command regenerates the polished terminal screenshots used in the report
+(`screenshots/victim_1_baseline.png`, `victim_2_attack.png`, `victim_3_ids.png`):
+
+```bash
+./capture_victim_screens.sh
 ```
 
 ---
 
-## Step 5: Run the Experiment (Manual / Interactive)
+## 7. Wireshark analysis
 
-For a deeper understanding and live demonstration, use 3 separate terminal windows.
+The lab prepared three clean capture files for Wireshark. If you want fresh ones you captured
+yourself, see step 7c.
 
-### Terminal 1 — Start Victim Monitor
-
+### 7a. Open the capture files
 ```bash
-docker exec -it victim python3 /scripts/monitor.py --threshold 5 --window 5
+open -a Wireshark "captures/wireshark_attacker_spoofed.pcap"   # spoofed source
+open -a Wireshark "captures/wireshark_victim_flood.pcap"       # 60-reply flood
+open -a Wireshark "captures/wireshark_combined.pcap"           # both (for the I/O graph)
 ```
 
-Keep this running. It will show real-time alerts when an attack is detected.
+### 7b. Screenshots to take (macOS: ⌘⇧4, drag over the window)
+| Open | Capture | Shows |
+|------|---------|-------|
+| `wireshark_attacker_spoofed.pcap` | packet list | Source column = victim `198.51.100.10` → broadcast (spoofing) |
+| `wireshark_victim_flood.pcap` | packet list | 60 replies from `203.0.113.11`–`.16` |
+| `wireshark_victim_flood.pcap` | **Statistics → Conversations → IPv4** | 6 conversations, 10 packets each, one-directional |
+| `wireshark_combined.pcap` | **Statistics → I/O Graph** | Requests vs Replies over time (6×) |
 
-### Terminal 2 — Start Victim Packet Capture
+For the **I/O Graph**, add two rows:
+- Display filter `icmp.type==8`, name "Requests"
+- Display filter `icmp.type==0`, name "Replies"
+- Uncheck "Avg over Time" on both; set **Interval = 0.1 or 0.5 sec**; Style = Bar.
 
+### 7c. Capture your own pcap (optional, to prove it's yours)
 ```bash
-docker exec -it victim bash /scripts/capture.sh attack 60
+# Terminal 1
+docker exec victim tcpdump -ni eth0 icmp -w /captures/my_capture.pcap -c 60
+# Terminal 2
+docker exec attacker python3 /scripts/smurf_attack.py --mode attack \
+  --victim-ip 198.51.100.10 --broadcast-ip 203.0.113.255 --rate 5 --count 10
+# then:  open -a Wireshark "captures/my_capture.pcap"
 ```
-
-This captures all ICMP traffic for 60 seconds.
-
-### Terminal 3 — Run Tests
-
-#### Test 1: Normal Ping (Baseline)
-
-```bash
-docker exec attacker python3 /scripts/smurf_attack.py \
-    --mode baseline \
-    --broadcast-ip 203.0.113.1 \
-    --rate 1 --count 5
-```
-
-✅ **Expected**: Terminal 1 shows normal traffic, **no alerts**. One request produces one reply.
 
 ---
 
-#### Test 2: Smurf Attack
+## 8. Test each defense individually
 
+Each defense is enabled, the attack is re-run, and the victim's reply count is checked.
+`run_experiment.sh defense` does all four automatically, but you can test them one at a time:
+
+### Defense 1 — Disable directed-broadcast forwarding (router)
 ```bash
-docker exec attacker python3 /scripts/smurf_attack.py \
-    --mode attack \
-    --victim-ip 198.51.100.10 \
-    --broadcast-ip 203.0.113.255 \
-    --rate 2 --count 10
-```
-
-✅ **Expected in Terminal 1**:
-- 🚨 **CRITICAL** alerts: "SMURF DETECTED"
-- 🚨 **CRITICAL** alerts: "REFLECTION PATTERN — 6 unique sources"
-- Multiple source IPs (203.0.113.1 through .6) sending replies
-- Amplification ratio ≈ 6x
-
----
-
-#### Test 3: Defense 1 — Disable Directed Broadcast
-
-```bash
-# Enable defense
 docker exec router bash /scripts/defense/disable_broadcast.sh enable
-
-# Re-run attack
-docker exec attacker python3 /scripts/smurf_attack.py \
-    --mode attack \
-    --victim-ip 198.51.100.10 \
-    --broadcast-ip 203.0.113.255 \
-    --rate 2 --count 10
-
-# Disable defense (reset for next test)
-docker exec router bash /scripts/defense/disable_broadcast.sh disable
+# run the attack (step 5); victim should receive 0
+docker exec router bash /scripts/defense/disable_broadcast.sh disable   # revert
 ```
 
-✅ **Expected**: **0 replies** at victim — broadcast is blocked at router.
-
----
-
-#### Test 4: Defense 2 — Ingress Filtering (Source Validation)
-
+### Defense 2 — Ingress filtering / source validation (router)
 ```bash
-# Enable defense
 docker exec router bash /scripts/defense/ingress_filter.sh enable
-
-# Re-run attack
-docker exec attacker python3 /scripts/smurf_attack.py \
-    --mode attack \
-    --victim-ip 198.51.100.10 \
-    --broadcast-ip 203.0.113.255 \
-    --rate 2 --count 10
-
-# Disable defense
+# attack -> 0 at victim (spoofed source dropped)
 docker exec router bash /scripts/defense/ingress_filter.sh disable
 ```
 
-✅ **Expected**: **Spoofed packets dropped** at router — never reach amplifiers.
-
----
-
-#### Test 5: Defense 3 — Suppress Broadcast Echo Response
-
+### Defense 3 — Suppress broadcast echo (amplifiers)
+The defense scripts are mounted on the router, not the amplifiers, so this defense is applied by
+setting the sysctl directly on each amplifier (exactly what `run_experiment.sh` does):
 ```bash
-# Enable defense on ALL amplifier hosts
-for i in 1 2 3 4 5 6; do
-    docker exec amp-h$i bash -c 'echo 1 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts'
+# enable: amplifiers ignore broadcast Echo Requests
+for h in amp-h1 amp-h2 amp-h3 amp-h4 amp-h5 amp-h6; do
+  docker exec $h bash -c "echo 1 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts"
 done
-
-# Re-run attack
-docker exec attacker python3 /scripts/smurf_attack.py \
-    --mode attack \
-    --victim-ip 198.51.100.10 \
-    --broadcast-ip 203.0.113.255 \
-    --rate 2 --count 10
-
-# Disable defense (re-enable amplifiers)
-for i in 1 2 3 4 5 6; do
-    docker exec amp-h$i bash -c 'echo 0 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts'
+# attack -> 0 at victim
+# revert (re-enable amplification for later tests):
+for h in amp-h1 amp-h2 amp-h3 amp-h4 amp-h5 amp-h6; do
+  docker exec $h bash -c "echo 0 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts"
 done
 ```
 
-✅ **Expected**: **0 replies** — amplifier hosts silently ignore broadcast Echo Requests.
-
----
-
-#### Test 6: Defense 4 — ICMP Rate Limiting
-
+### Defense 4 — ICMP rate limiting (router)
 ```bash
-# Enable defense (limit to 3 replies/sec, burst of 5)
-docker exec router bash /scripts/defense/rate_limit.sh enable 3 5
-
-# Re-run attack
-docker exec attacker python3 /scripts/smurf_attack.py \
-    --mode attack \
-    --victim-ip 198.51.100.10 \
-    --broadcast-ip 203.0.113.255 \
-    --rate 2 --count 10
-
-# Disable defense
+docker exec router bash /scripts/defense/rate_limit.sh enable 5 10
+# attack -> reduced (not zero) at victim
 docker exec router bash /scripts/defense/rate_limit.sh disable
 ```
 
-✅ **Expected**: **Reduced reply rate** — only ~3 replies/sec pass through instead of full flood.
+> After testing defenses manually, revert them (the `disable` commands above) before re-running
+> a clean attack, or the attack will appear to fail.
 
 ---
 
-#### Stop the Monitor
+## 9. Expected results (quick reference)
 
-Press `Ctrl+C` in Terminal 1. You'll see a summary:
+| Scenario | Replies at victim | Verdict |
+|----------|-------------------|---------|
+| Baseline | 0 | normal |
+| **Attack (no defense)** | **60** (6×) | victim flooded |
+| Defense 1 (broadcast disabled) | 0 | blocked |
+| Defense 2 (ingress filtering) | 0 | blocked |
+| Defense 3 (suppress echo) | 0 | blocked |
+| Defense 4 (rate limiting) | reduced | mitigated |
 
-```
-  MONITORING SUMMARY
-  Duration          : 120.5s
-  Echo Requests (out): 0
-  Echo Replies  (in) : 47
-  Alerts triggered   : 8
-  Amplification ratio: ∞ (no outbound requests!)
-  Attack detected    : YES ⚠️
-```
-
----
-
-## Step 6: Analyze Captures
-
-### View captured files
-
+Count replies at the victim from any capture:
 ```bash
-ls -la captures/
-```
-
-### Run analysis on attack capture
-
-```bash
-docker exec victim python3 /scripts/analysis/analyze_pcap.py /captures/attack_*.pcap
-```
-
-This outputs:
-- Packet counts (requests vs replies)
-- Unique source IPs
-- Observed amplification factor
-- Timing statistics
-
-### Compare baseline vs attack vs defense
-
-```bash
-docker exec victim python3 /scripts/analysis/analyze_pcap.py \
-    /captures/baseline_*.pcap \
-    /captures/attack_*.pcap \
-    /captures/defense_broadcast_*.pcap \
-    --compare
-```
-
-### Generate charts
-
-```bash
-docker exec victim python3 /scripts/analysis/plot_results.py \
-    /captures/attack_*.pcap \
-    --output-dir /results
-```
-
-### View charts
-
-```bash
-open results/*.png
-```
-
-Generated charts include:
-- **Timeline plot** — packet arrivals over time at the victim
-- **Source distribution** — replies per amplifier host
-- **Amplification chart** — observed vs theoretical
-- **Defense comparison** — before/after reply counts
-
----
-
-## Step 7: Success Criteria Checklist
-
-| # | Criterion (from Design Report §9.2) | How to Verify | Pass? |
-|---|--------------------------------------|---------------|-------|
-| 1 | Normal one-to-one ICMP exchange verified | Baseline test: 5 requests → 5 replies | ☐ |
-| 2 | Broadcast request reaches configured amplifier hosts | Fan-out test: all 6 hosts respond | ☐ |
-| 3 | Victim receives reflected Echo Replies from multiple responders | Attack test: monitor shows 6 unique sources | ☐ |
-| 4 | Amplification consistent with number of responding hosts | Analysis shows amplification ≈ 6x | ☐ |
-| 5 | Defenses break the reflection path | Each defense reduces/eliminates replies | ☐ |
-
----
-
-## Step 8: Cleanup
-
-```bash
-# Stop and remove all containers + networks
-docker compose down
-
-# Also remove built images (optional, saves disk space)
-docker compose down --rmi all
-
-# Clear experiment data
-rm -f captures/*.pcap captures/*.log results/*.png
+docker exec victim tshark -r /captures/<file>.pcap -q -z endpoints,ip
 ```
 
 ---
 
-## Troubleshooting
+## 10. Troubleshooting
 
-| Problem | Solution |
-|---------|----------|
-| `docker compose up` fails | Check: `docker info` — is Docker Desktop running? |
-| Container exits immediately | `docker compose logs <name>` to check error |
-| Pings fail between nodes | `docker exec router sysctl net.ipv4.ip_forward` — should be `1` |
-| No broadcast replies | `docker exec amp-h1 cat /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts` — must be `0` |
-| Monitor shows nothing | Start monitor **before** running the attack |
-| `Permission denied` on scripts | `chmod +x run_experiment.sh scripts/**/*.sh configs/*.sh` |
-| Captures directory empty | Check volume mounts: `docker inspect victim \| grep Mounts` |
-| Analysis shows 0 packets | Verify pcap path: `docker exec victim ls /captures/` |
+| Symptom | Cause / Fix |
+|---------|-------------|
+| `Address already in use` on `up` | Stale networks. `docker compose down` then `up -d`. |
+| Attack shows **0** replies at victim | A defense is still enabled from a previous test. Run all four `*.sh … disable` (and re-enable `bc_forwarding`): `docker exec router bash -c 'for d in /proc/sys/net/ipv4/conf/*/bc_forwarding; do echo 1 > "$d"; done'` and `for h in amp-h1 amp-h2 amp-h3 amp-h4 amp-h5 amp-h6; do docker exec $h bash -c "echo 0 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts"; done` |
+| `run_experiment.sh` exits early | Make sure all 9 containers are Up (`docker compose ps`). |
+| Container can reach the Internet | The router should carry no default route; recreate it: `docker compose up -d --build router`. |
+| No plots in `results/` | Run `./run_experiment.sh analyze` after an attack. |
 
 ---
 
-## Quick Command Reference
+## 11. Tear down
 
 ```bash
-# === LIFECYCLE ===
-docker compose build                    # Build images
-docker compose up -d                    # Start lab
-docker compose ps                       # Check status
-docker compose down                     # Stop & cleanup
-
-# === SHELL ACCESS ===
-docker exec -it attacker bash           # Shell into attacker
-docker exec -it victim bash             # Shell into victim
-docker exec -it router bash             # Shell into router
-docker exec -it amp-h1 bash             # Shell into amplifier
-
-# === EXPERIMENT ===
-./run_experiment.sh all                 # Run everything
-./run_experiment.sh baseline            # Normal ping test
-./run_experiment.sh attack              # Smurf attack test
-./run_experiment.sh defense             # All 4 defense tests
-./run_experiment.sh analyze             # Analyze captures
-
-# === LOGS ===
-docker compose logs attacker            # View container logs
-docker compose logs -f victim           # Follow victim logs
+docker compose down          # stop and remove containers + networks
+docker compose down --rmi all --volumes   # also remove images (full clean)
 ```
+
+Generated `captures/` and `results/` are recreated on the next run and are git-ignored.

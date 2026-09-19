@@ -1,6 +1,5 @@
-# =============================================================================
 # ICMP Smurf Attack Lab — Docker Compose Topology
-# =============================================================================
+
 # Topology (from Security Design Report §4):
 #
 #   Attacker (10.0.0.9)
@@ -15,7 +14,6 @@
 #
 # All networks are internal (no external routing). Uses documentation
 # address space per RFC 5737 (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24).
-# =============================================================================
 
 services:
   # ---------- ATTACKER ----------
@@ -213,11 +211,10 @@ services:
     tty: true
     stdin_open: true
 
-# =============================================================================
 # Networks — all internal (no external gateway)
 # Docker auto-assigns a gateway IP on the bridge interface.
 # Container IPs are chosen to avoid conflicting with Docker's gateway.
-# =============================================================================
+
 networks:
   attacker_net:
     driver: bridge

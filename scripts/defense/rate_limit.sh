@@ -1,13 +1,11 @@
 #!/bin/bash
-# =============================================================================
-# Defense 4: ICMP Rate Limiting (§10.2)
-# =============================================================================
+
+# Defense 4: ICMP Rate Limiting 
 # Run on: ROUTER or VICTIM
 #
 # Effect: Limits the rate of ICMP traffic forwarded/received using iptables
 #         --limit. This is a secondary control that reduces impact of residual
 #         traffic without removing the underlying reflection path.
-# =============================================================================
 
 ACTION="${1:-enable}"
 RATE="${2:-5}"          # packets per second

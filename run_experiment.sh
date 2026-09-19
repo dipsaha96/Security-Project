@@ -1,8 +1,6 @@
 #!/bin/bash
-# =============================================================================
-# ICMP Smurf Attack — Master Experiment Runner
-# =============================================================================
-# Orchestrates the complete experiment sequence:
+
+# ICMP Smurf Attack — Experiment Runner
 #
 #   Phase 1: Baseline (normal ICMP)
 #   Phase 2: Broadcast fan-out verification
@@ -21,7 +19,6 @@
 #   ./run_experiment.sh attack       # run only attack phase
 #   ./run_experiment.sh defense      # run only defense tests
 #   ./run_experiment.sh analyze      # run only analysis
-# =============================================================================
 
 set -e
 
@@ -35,11 +32,7 @@ AMPLIFIER_HOSTS=("amp-h1" "amp-h2" "amp-h3" "amp-h4" "amp-h5" "amp-h6")
 
 PHASE="${1:-all}"
 
-echo "╔══════════════════════════════════════════════════════════════════════╗"
-echo "║          ICMP SMURF ATTACK — EXPERIMENT RUNNER                     ║"
-echo "║          ⚠️  ISOLATED LAB ENVIRONMENT ONLY                         ║"
-echo "╚══════════════════════════════════════════════════════════════════════╝"
-echo ""
+echo "ICMP SMURF ATTACK — EXPERIMENT RUNNER"
 echo "  Rate          : ${ATTACK_RATE} pkt/s"
 echo "  Count         : ${ATTACK_COUNT} packets"
 echo "  Capture time  : ${CAPTURE_DURATION}s"
@@ -61,9 +54,7 @@ wait_msg() {
     echo ""
 }
 
-# =============================================================================
-# PHASE 1: BASELINE — Normal ICMP Echo (§6.1, §9.2 item 1)
-# =============================================================================
+# PHASE 1: BASELINE — Normal ICMP Echo 
 run_baseline() {
     wait_msg "PHASE 1: Normal ICMP Echo Baseline"
 
@@ -85,9 +76,7 @@ run_baseline() {
     echo "  ✓ Baseline capture complete."
 }
 
-# =============================================================================
-# PHASE 2: BROADCAST FAN-OUT (§5.2, §9.2 item 2)
-# =============================================================================
+# PHASE 2: BROADCAST FAN-OUT 
 run_fanout() {
     wait_msg "PHASE 2: Directed Broadcast Fan-Out Verification"
 
@@ -113,9 +102,7 @@ run_fanout() {
     echo "  ✓ Fan-out verification complete."
 }
 
-# =============================================================================
-# PHASE 3: SMURF ATTACK (§5, §9.2 items 3-4)
-# =============================================================================
+# PHASE 3: SMURF ATTACK 
 run_attack() {
     wait_msg "PHASE 3: Smurf Attack Demonstration"
 
@@ -152,9 +139,7 @@ run_attack() {
     echo "  ✓ Smurf attack demonstration complete."
 }
 
-# =============================================================================
-# PHASE 4: DEFENSE TESTS (§10, §9.2 item 5)
-# =============================================================================
+# PHASE 4: DEFENSE TESTS 
 run_defense_tests() {
     wait_msg "PHASE 4: Defense Verification"
 
@@ -242,9 +227,7 @@ run_defense_tests() {
     echo "  ✓ All defense tests complete."
 }
 
-# =============================================================================
-# PHASE 5: ANALYSIS & VISUALIZATION
-# =============================================================================
+# PHASE 5: ANALYSIS & VISUALIZATION 
 run_analysis() {
     wait_msg "PHASE 5: Analysis & Visualization"
 
@@ -282,9 +265,6 @@ run_analysis() {
     echo "  ✓ Analysis complete. Results in results/"
 }
 
-# =============================================================================
-# MAIN
-# =============================================================================
 case "$PHASE" in
     baseline)   run_baseline ;;
     fanout)     run_fanout ;;
@@ -305,8 +285,6 @@ case "$PHASE" in
 esac
 
 echo ""
-echo "╔══════════════════════════════════════════════════════════════════════╗"
-echo "║  EXPERIMENT COMPLETE                                               ║"
-echo "║  Captures: captures/                                               ║"
-echo "║  Results:  results/                                                ║"
-echo "╚══════════════════════════════════════════════════════════════════════╝"
+echo "EXPERIMENT COMPLETE"
+echo "Captures: captures/"
+echo "Results:  results/"

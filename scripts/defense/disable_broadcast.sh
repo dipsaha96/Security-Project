@@ -1,14 +1,11 @@
 #!/bin/bash
-# =============================================================================
-# Defense 1: Disable Directed-Broadcast Forwarding (§10.2, RFC 2644)
-# =============================================================================
+# Defense 1: Disable Directed-Broadcast Forwarding 
 # Run on: ROUTER
 #
 # Effect: The router will no longer forward packets destined to the
 #         amplifier subnet's broadcast address (203.0.113.255).
-#         This prevents the Smurf request from reaching the amplifier hosts.
-# =============================================================================
-
+#         This prevents the Smurf request from reaching th  e amplifier hosts.
+    
 ACTION="${1:-enable}"   # "enable" to apply defense, "disable" to remove it
 
 echo "============================================================"
